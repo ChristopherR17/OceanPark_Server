@@ -1,0 +1,23 @@
+Pantalla de inicio:
+- Go
+- Lista de jugadores
+- Introducir nickname
+
+Primera pantalla:
+- Mapa fijo
+- Llave
+- Imagen de los 2 jugadores
+
+================================
+Server:
+================================
+- Manda el nombre del sprite que usará cada jugador
+- Generar posiciones de las plataformas y enviarlas
+
+
+json
+{
+    type: Move
+    value: left
+}
+

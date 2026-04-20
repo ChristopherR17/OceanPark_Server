@@ -1,44 +1,24 @@
 {
-  "name": "pico-park-server",
+  "name": "oceanpark-server",
   "version": "1.0.0",
   "description": "Servidor para juego cooperativo tipo Pico Park",
   "homepage": "https://github.com/ChristopherR17/OceanPark_Server#readme",
   "bugs": {
     "url": "https://github.com/ChristopherR17/OceanPark_Server/issues"
   },
+
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ChristopherR17/OceanPark_Server.git"
   },
-  "license": "ISC",
-  "author": "",
+
   "type": "commonjs",
   "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "debug": "nodemon --inspect src/server.js",
-    "prod": "NODE_ENV=production node src/server.js",
-    "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop pico-park-server",
-    "pm2:restart": "pm2 restart pico-park-server",
-    "pm2:logs": "pm2 logs pico-park-server",
-    "pm2:monit": "pm2 monit"
-  },
+  
   "dependencies": {
-    "express": "^4.18.2",
+    "uuid": "14.0.0",
     "mongoose": "^7.5.0",
-    "dotenv": "^16.3.1",
-    "compression": "^1.7.4",
     "winston": "^3.10.0",
-    "ws": "8.20.0",
-    "cross-env": "10.1.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "ws": "8.20.0"
   }
 }
