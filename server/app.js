@@ -1,5 +1,7 @@
 const WebSocket = require("ws");
 const crypto = require("crypto");
+const fs = require("fs"); // Importamos el sistema de archivos
+const path = require("path"); // Importamos manejador de rutas
 require("dotenv").config();
 
 const Room = require("./room");
@@ -12,7 +14,20 @@ const SERVER_PORT = process.env.SERVER_PORT || 3000;
 const wss = new WebSocket.Server({ port: SERVER_PORT });
 const room = new Room();
 
-logger.info(`Server running on ${SERVER_PORT}`);
+// --- 1. CARGAR LOS DATOS DEL NIVEL ---
+const layerPath = path.join(__dirname, 'level_000_layer_000.json');
+const zonesPath = path.join(__dirname, 'level_000_zones.json');
+
+// Leemos la matriz del mapa y las zonas
+const layerData = JSON.parse(fs.readFileSync(layerPath, 'utf8'));
+const zonesData = JSON.parse(fs.readFileSync(zonesPath, 'utf8'));
+
+// Buscamos las coordenadas de inicio del Player Zone
+const playerZone = zonesData.zones.find(z => z.type === "Player Zone");
+const spawnX = playerZone ? playerZone.x : 100; // Será 25 según tu JSON
+const spawnY = playerZone ? playerZone.y : 100; // Será 100 según tu JSON
+
+logger.info(`Server running on ${SERVER_PORT}. Spawn: [${spawnX}, ${spawnY}]`);
 
 /**
  * CONEXIÓN
@@ -56,7 +71,7 @@ function handleMessage(ws, id, data) {
   }
 
   switch (data.type) {
-    case "JOIN": {
+case "JOIN": {
       if (room.players.has(id)) {
         ws.send(JSON.stringify({ type: "ERROR", message: "Player already joined" }));
         return;
@@ -67,7 +82,8 @@ function handleMessage(ws, id, data) {
           ? data.name.trim()
           : "Anonymous";
 
-      const player = new Player(id, name, ws);
+      // 1. Pasamos spawnX y spawnY al crear el jugador
+      const player = new Player(id, name, ws, spawnX, spawnY);
       const added = room.addPlayer(player);
 
       if (!added) {
@@ -75,11 +91,14 @@ function handleMessage(ws, id, data) {
         return;
       }
 
+      // 2. Le enviamos la confirmación al cliente JUNTO con el mapa y su posición inicial
       ws.send(
         JSON.stringify({
           type: "JOINED",
           playerId: id,
           name: player.name,
+          map: layerData.tileMap, // Enviamos la matriz del mapa del JSON
+          spawnPosition: { x: spawnX, y: spawnY } // Le decimos dónde aparece
         })
       );
 

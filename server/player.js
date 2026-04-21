@@ -1,12 +1,14 @@
 class Player {
-  constructor(id, name, ws) {
+  // Añadimos startX y startY al constructor
+  constructor(id, name, ws, startX, startY) {
     this.id = id;
     this.name = name;
 
-    this.ws = ws; //conexion websocket
+    this.ws = ws; // conexion websocket
 
-    this.x = 100;
-    this.y = 100;
+    // Asignamos las coordenadas iniciales dinámicamente
+    this.x = startX;
+    this.y = startY;
 
     this.vx = 0;
     this.vy = 0;
