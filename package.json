@@ -13,7 +13,7 @@
   "type": "commonjs",
   "main": "server/server.js",
   "scripts": {
-    "start": "node srserverc/app.js",
+    "start": "node server/app.js",
     "dev": "node server/app.js"
   },
   "dependencies": {
