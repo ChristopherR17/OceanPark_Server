@@ -8,7 +8,11 @@ class Room {
     this.minPlayers = 2;
 
     this.availableSkins = [
-      "mew"
+      "mew",
+      "doraemon",
+      "creeper",
+      "luigi",
+      "egg"
       //poner mas skins
     ];
   }

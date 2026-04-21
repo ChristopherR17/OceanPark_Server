@@ -1,7 +1,7 @@
 const logger = require("./logger");
 
 function startGameLoop(room, broadcast) {
-  const FPS = 20;
+  const FPS = 2;
   const FRAME_TIME = 1000 / FPS;
 
   const GRAVITY = 1;

@@ -9,10 +9,10 @@ const logger = require("./logger");
 
 const SERVER_PORT = process.env.SERVER_PORT || 3000;
 
-const wss = new WebSocket.Server({ port: SERVER_PORT });
+const wss = new WebSocket.Server({ port: SERVER_PORT});
 const room = new Room();
 
-logger.info(`Server running on ${SERVER_PORT}`);
+logger.info(`Server running on ws://localhost:${SERVER_PORT}`);
 
 /**
  * CONEXIÓN
@@ -110,6 +110,8 @@ function handleMessage(ws, id, data) {
       if (data.jump && player.y >= GROUND_Y) {
         player.vy = JUMP_FORCE;
       }
+
+      logger.debug(`MOVE ${id} -> vx:${player.vx} vy:${player.vy}`);
 
       break;
     }
