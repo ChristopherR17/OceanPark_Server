@@ -1,0 +1,183 @@
+{
+  "name": "Ocean Park",
+  "description": "",
+  "levels": [
+    {
+      "name": "Ocean World",
+      "description": "",
+      "gameplayData": "",
+      "layers": [
+        {
+          "name": "COLOR PARED",
+          "gameplayData": "",
+          "x": -75,
+          "y": 0,
+          "depth": 5.0,
+          "tilesSheetFile": "media/tileset_cueva_2.png",
+          "tilesWidth": 23,
+          "tilesHeight": 23,
+          "visible": true,
+          "groupId": "__main__",
+          "tileMapFile": "tilemaps/level_000_layer_000.json"
+        }
+      ],
+      "layerGroups": [
+        {
+          "id": "__main__",
+          "name": "Main",
+          "collapsed": false
+        }
+      ],
+      "sprites": [],
+      "spriteGroups": [
+        {
+          "id": "__main__",
+          "name": "Main",
+          "collapsed": false
+        }
+      ],
+      "groupId": "__main__",
+      "viewportWidth": 320,
+      "viewportHeight": 180,
+      "viewportX": 173,
+      "viewportY": 473,
+      "viewportAdaptation": "letterbox",
+      "viewportInitialColor": "orange",
+      "viewportPreviewColor": "blue",
+      "backgroundColorHex": "#568BB1",
+      "depthSensitivity": 0.08,
+      "zonesFile": "zones/level_000_zones.json",
+      "pathsFile": "paths/level_000_paths.json"
+    }
+  ],
+  "levelGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    }
+  ],
+  "mediaAssets": [
+    {
+      "name": "mew_sinfondo",
+      "fileName": "media/mew_sinfondo.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 205,
+      "tileHeight": 160,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "tileset_cueva_2",
+      "fileName": "media/tileset_cueva_2.png",
+      "mediaType": "tileset",
+      "tileWidth": 23,
+      "tileHeight": 23,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "tileset_cueva",
+      "fileName": "media/tileset_cueva.png",
+      "mediaType": "tileset",
+      "tileWidth": 23,
+      "tileHeight": 23,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "mew_sprite",
+      "fileName": "media/mew_sprite.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 41,
+      "tileHeight": 36,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "probando mew",
+      "fileName": "media/Captura de pantalla de 2026-04-20 18-42-23.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 207,
+      "tileHeight": 165,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "mew final",
+      "fileName": "media/Captura de pantalla de 2026-04-20 18-34-45.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 1000,
+      "tileHeight": 1000,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "pritesheet",
+      "fileName": "media/pritesheet.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 220,
+      "tileHeight": 1000,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "mew_spritesheet-Photoroom(1)",
+      "fileName": "media/mew_spritesheet-Photoroom(1).png",
+      "mediaType": "tileset",
+      "tileWidth": 10000,
+      "tileHeight": 1000,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "mew caminando",
+      "fileName": "media/Captura de pantalla de 2026-04-20 18-32-44.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 10000,
+      "tileHeight": 1000000,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "water_tilesets",
+      "fileName": "media/water_tilesets.png",
+      "mediaType": "tileset",
+      "tileWidth": 150,
+      "tileHeight": 170,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "Captura de pantalla de 2026-04-20 19-21-24",
+      "fileName": "media/Captura de pantalla de 2026-04-20 19-21-24.png",
+      "mediaType": "tileset",
+      "tileWidth": 140,
+      "tileHeight": 160,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    }
+  ],
+  "mediaGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    }
+  ],
+  "zoneTypes": [
+    {
+      "name": "Player Zone",
+      "color": "green"
+    },
+    {
+      "name": "Player Death",
+      "color": "red"
+    },
+    {
+      "name": "Floor",
+      "color": "yellow"
+    }
+  ],
+  "animationsFile": "animations/animations.json"
+}
