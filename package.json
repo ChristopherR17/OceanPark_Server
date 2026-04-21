@@ -1,20 +1,21 @@
 {
-  "name": "oceanpark-server",
+  "name": "server",
   "version": "1.0.0",
   "description": "Servidor para juego cooperativo tipo Pico Park",
   "homepage": "https://github.com/ChristopherR17/OceanPark_Server#readme",
   "bugs": {
     "url": "https://github.com/ChristopherR17/OceanPark_Server/issues"
   },
-
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ChristopherR17/OceanPark_Server.git"
   },
-
   "type": "commonjs",
-  "main": "src/server.js",
-  
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node srserverc/app.js",
+    "dev": "node server/app.js"
+  },
   "dependencies": {
     "dotenv": "17.4.2",
     "keypress": "0.2.1",
