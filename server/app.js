@@ -98,20 +98,9 @@ function handleMessage(ws, id, data) {
         return;
       }
 
-      const JUMP_FORCE = -12;
-      const GROUND_Y = 100;
-
-      // movimiento horizontal
-      if (data.left) player.vx = -5;
-      else if (data.right) player.vx = 5;
-      else player.vx = 0;
-
-      // salto real (solo si está en el suelo)
-      if (data.jump && player.y >= GROUND_Y) {
-        player.vy = JUMP_FORCE;
-      }
-
-      logger.debug(`MOVE ${id} -> vx:${player.vx} vy:${player.vy}`);
+      player.input.left = !!data.left;
+      player.input.right = !!data.right;
+      player.input.jump = !!data.jump;
 
       break;
     }
