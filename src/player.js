@@ -1,9 +1,10 @@
 class Player {
-  constructor(id, name) {
+  constructor(id, name, ws) {
     this.id = id;
     this.name = name;
 
-    // 👇 ya pensado para el juego
+    this.ws = ws; //conexion websocket
+
     this.x = 100;
     this.y = 100;
 

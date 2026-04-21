@@ -6,15 +6,16 @@
   "bugs": {
     "url": "https://github.com/ChristopherR17/OceanPark_Server/issues"
   },
-
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ChristopherR17/OceanPark_Server.git"
   },
-
   "type": "commonjs",
   "main": "src/server.js",
-  
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
   "dependencies": {
     "dotenv": "17.4.2",
     "keypress": "0.2.1",

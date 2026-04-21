@@ -3,26 +3,28 @@ const logger = require("./logger");
 class Room {
   constructor() {
     this.players = new Map();
-
     this.state = "waiting"; // waiting | playing
-
     this.maxPlayers = 8;
     this.minPlayers = 2;
   }
 
   addPlayer(player) {
     if (this.players.size >= this.maxPlayers) {
-        logger.warn('Room is full');
-        return false
+      logger.warn("Room is full");
+      return false;
     }
 
     this.players.set(player.id, player);
-    logger.info('Player has been added');
+    logger.info(`Player added: ${player.id} (${player.name})`);
     return true;
   }
 
   removePlayer(id) {
-    this.players.delete(id);
+    const existed = this.players.delete(id);
+
+    if (existed) {
+      logger.info(`Player removed: ${id}`);
+    }
   }
 
   getPlayers() {
@@ -35,6 +37,7 @@ class Room {
 
   setState(state) {
     this.state = state;
+    logger.info(`Room state set to: ${state}`);
   }
 }
 
