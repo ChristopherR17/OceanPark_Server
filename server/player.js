@@ -11,6 +11,16 @@ class Player {
     this.vx = 0;
     this.vy = 0;
   }
+
+  toJSON() {
+    return {
+      id: this.id,
+      name: this.name,
+      x: this.x,
+      y: this.y,
+      skin: this.skin
+    };
+  }
 }
 
 module.exports = Player;

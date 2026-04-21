@@ -11,7 +11,7 @@
     "url": "git+https://github.com/ChristopherR17/OceanPark_Server.git"
   },
   "type": "commonjs",
-  "main": "server/server.js",
+  "main": "server/app.js",
   "scripts": {
     "start": "node server/app.js",
     "dev": "node server/app.js"

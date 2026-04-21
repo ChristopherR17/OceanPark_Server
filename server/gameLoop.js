@@ -1,3 +1,5 @@
+const logger = require("./logger");
+
 function startGameLoop(room, broadcast) {
   const FPS = 20;
   const FRAME_TIME = 1000 / FPS;
@@ -9,14 +11,11 @@ function startGameLoop(room, broadcast) {
     if (room.state !== "playing") return;
 
     room.players.forEach((player) => {
-      // aplicar gravedad
       player.vy += GRAVITY;
 
-      // mover
       player.x += player.vx;
       player.y += player.vy;
 
-      // colisión con suelo
       if (player.y > GROUND_Y) {
         player.y = GROUND_Y;
         player.vy = 0;
@@ -25,8 +24,9 @@ function startGameLoop(room, broadcast) {
 
     broadcast({
       type: "STATE",
-      players: room.getPlayers(),
+      players: room.getPlayers().map(p => p.toJSON())
     });
+
   }, FRAME_TIME);
 }
 
