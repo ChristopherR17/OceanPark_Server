@@ -1,66 +1,46 @@
-const logger = require("./logger");
+const fs = require("fs");
+const path = require("path");
 
 class Room {
   constructor() {
     this.players = new Map();
-    this.state = "waiting"; // waiting | playing
-    this.maxPlayers = 8;
-    this.minPlayers = 2;
+    this.state = "waiting";
+    this.levelData = this.loadLevel();
+  }
 
-    this.availableSkins = [
-      "mew"
-      //poner mas skins
-    ];
+  loadLevel() {
+    try {
+      const gameData = JSON.parse(fs.readFileSync(path.join(__dirname, 'game_data.json'), 'utf8'));
+      const level = gameData.levels[0];
+      const layer = level.layers[0];
+      
+      // Intentamos cargar el archivo de tiles si existe
+      const tileMapJson = JSON.parse(fs.readFileSync(path.join(__dirname, layer.tileMapFile), 'utf8'));
+
+      return {
+        layer: {
+          tilesWidth: layer.tilesWidth,
+          tilesHeight: layer.tilesHeight,
+          tileMap: tileMapJson.tileMap
+        },
+        spawn: { x: 400, y: 300 } // Posición por defecto
+      };
+    } catch (e) {
+      console.log("⚠️ Trabajando sin mapa (game_data.json no encontrado o inválido)");
+      return { layer: null, spawn: { x: 100, y: 100 } };
+    }
   }
 
   addPlayer(player) {
-    if (this.players.size >= this.maxPlayers) {
-      logger.warn("Room is full");
-      return false;
-    }
-
-    if (this.availableSkins.length === 0) {
-      logger.warn("No skins available");
-      return false;
-    }
-
-    //Para hacer que las skins sean random
-    const index = Math.floor(Math.random() * this.availableSkins.length);
-    const skin = this.availableSkins.splice(index, 1)[0];
-
-    player.skin = skin;
-
+    player.x = this.levelData.spawn.x;
+    player.y = this.levelData.spawn.y;
     this.players.set(player.id, player);
-    logger.info(`Player added: ${player.id} (${player.name})`);
     return true;
   }
 
-  removePlayer(id) {
-    const player = this.players.get(id);
-
-    if (player){
-      this.availableSkins.push(player.skin);
-    }
-
-    const existed = this.players.delete(id);
-
-    if (existed) {
-      logger.info(`Player removed: ${id}`);
-    }
-  }
-
-  getPlayers() {
-    return Array.from(this.players.values());
-  }
-
-  isReady() {
-    return this.players.size >= this.minPlayers;
-  }
-
-  setState(state) {
-    this.state = state;
-    logger.info(`Room state set to: ${state}`);
-  }
+  removePlayer(id) { this.players.delete(id); }
+  isReady() { return this.players.size > 0; }
+  setState(state) { this.state = state; }
 }
 
 module.exports = Room;
