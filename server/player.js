@@ -3,9 +3,23 @@ class Player {
     this.id = id;
     this.name = name;
     this.ws = ws;
+
     this.x = 0;
     this.y = 0;
-    this.input = { left: false, right: false, jump: false };
+
+    this.input = { 
+      left: false, 
+      right: false, 
+      jump: false 
+    };
+
+    this.onGround = false;
+
+    this.input = {left: false, right: false, jump: false}
+
+    this.state = "idle"; //idle / run / jump
+
+    this.dir = "RIGHT" 
   }
 }
 module.exports = Player;

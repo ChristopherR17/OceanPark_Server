@@ -108,19 +108,22 @@ function handleMessage(ws, id, data) {
           const prevRight = player.input.right;
           const prevJump = player.input.jump;
 
-          // Actualizamos al nuevo estado
+          // Persistente
           player.input.left = !!data.left;
           player.input.right = !!data.right;
-          player.input.jump = !!data.jump;
 
-          // 🧠 LOG INTELIGENTE: Solo avisa si algo ha cambiado
-          if (prevLeft !== player.input.left || prevRight !== player.input.right || prevJump !== player.input.jump) {
-              
+          // Evento
+          if (data.jump) {
+            player.input.jump = true;
+          }
+
+          // LOG INTELIGENTE: Solo avisa si algo ha cambiado
+          if (prevLeft !== player.input.left || prevRight !== player.input.right || (data.jump && !prevJump)) {
               // Creamos un texto visual de qué está haciendo
               let accion = [];
               if (player.input.left) accion.push("⬅️ Izquierda");
               if (player.input.right) accion.push("➡️ Derecha");
-              if (player.input.jump) accion.push("⬆️ Salto");
+              if (data.jump) accion.push("⬆️ Salto");
               if (accion.length === 0) accion.push("🛑 Parado");
 
               logger.info(`🏃 ${player.name} acción: ${accion.join(" + ")}`);
