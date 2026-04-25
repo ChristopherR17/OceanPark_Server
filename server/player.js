@@ -7,17 +7,18 @@ class Player {
     this.x = 0;
     this.y = 0;
 
+    this.vx = 0;
+    this.vy = 0;
+
     this.input = { 
       left: false, 
       right: false, 
       jump: false 
     };
 
-    this.onGround = false;
+    this.onGround = true;
 
-    this.input = {left: false, right: false, jump: false}
-
-    this.state = "idle"; //idle / run / jump
+    this.state = "IDLE"; //idle / run / jump
 
     this.dir = "RIGHT" 
   }

@@ -50,7 +50,7 @@ function startGameLoop(room, broadcast) {
       // ────────────────
       // 4. COLISIÓN CON SUELO
       // ────────────────
-      if (player.y > GROUND_Y) {
+      if (player.y >= GROUND_Y) {
         player.y = GROUND_Y;
         player.vy = 0;
         player.onGround = true;
@@ -62,11 +62,11 @@ function startGameLoop(room, broadcast) {
       // 5. ESTADO (ANIMACIÓN)
       // ────────────────
       if (!player.onGround) {
-        player.state = "jump";
+        player.state = "JUMP";
       } else if (Math.abs(player.vx) > 0) {
-        player.state = "run";
+        player.state = "RUN";
       } else {
-        player.state = "idle";
+        player.state = "IDLE";
       }
 
       // ────────────────
@@ -78,7 +78,7 @@ function startGameLoop(room, broadcast) {
         x: player.x,
         y: player.y,
         state: player.state,
-        dir: player.dir
+        facingRight: player.dir === "RIGHT"
       });
     });
 
@@ -87,7 +87,8 @@ function startGameLoop(room, broadcast) {
     // ────────────────
     broadcast({
       type: "STATE",
-      players: playersState
+      players: playersState, 
+      time: Date.now()
     });
 
   }, FRAME_TIME);
