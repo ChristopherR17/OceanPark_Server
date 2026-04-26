@@ -18,9 +18,8 @@ class Player {
 
     this.onGround = true;
 
-    this.state = "IDLE"; //idle / run / jump
-
-    this.dir = "RIGHT" 
+    this.state = "IDLE";
+    this.dir = "RIGHT";
   }
 }
 module.exports = Player;

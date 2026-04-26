@@ -1,10 +1,7 @@
-const logger = require("./logger");
-
 function startGameLoop(room, broadcast) {
   const FPS = 60;
   const FRAME_TIME = 1000 / FPS;
 
-  // Parámetros de física
   const SPEED = 5;
   const GRAVITY = 1;
   const JUMP_FORCE = -15;
@@ -17,39 +14,31 @@ function startGameLoop(room, broadcast) {
 
     room.players.forEach((player) => {
 
-      // ────────────────
       // 1. MOVIMIENTO HORIZONTAL
-      // ────────────────
       if (player.input.left) {
         player.vx = -SPEED;
-        player.dir = "LEFT"
+        player.dir = "LEFT";
       } else if (player.input.right) {
         player.vx = SPEED;
-        player.dir = "RIGHT"
+        player.dir = "RIGHT";
       } else {
         player.vx = 0;
       }
 
       player.x += player.vx;
 
-      // ────────────────
-      // 2. SALTO (EVENTO)
-      // ────────────────
+      // 2. SALTO
       if (player.input.jump && player.onGround) {
         player.vy = JUMP_FORCE;
         player.onGround = false;
-        player.input.jump = false; //RESET DEL SALTO
+        player.input.jump = false;
       }
 
-      // ────────────────
       // 3. GRAVEDAD
-      // ────────────────
       player.vy += GRAVITY;
       player.y += player.vy;
 
-      // ────────────────
-      // 4. COLISIÓN CON SUELO
-      // ────────────────
+      // 4. SUELO
       if (player.y >= GROUND_Y) {
         player.y = GROUND_Y;
         player.vy = 0;
@@ -58,9 +47,7 @@ function startGameLoop(room, broadcast) {
         player.onGround = false;
       }
 
-      // ────────────────
-      // 5. ESTADO (ANIMACIÓN)
-      // ────────────────
+      // 5. ESTADO
       if (!player.onGround) {
         player.state = "JUMP";
       } else if (Math.abs(player.vx) > 0) {
@@ -69,9 +56,7 @@ function startGameLoop(room, broadcast) {
         player.state = "IDLE";
       }
 
-      // ────────────────
-      // 6. GUARDAR ESTADO
-      // ────────────────
+      // 6. DATA PARA CLIENTE
       playersState.push({
         id: player.id,
         name: player.name,
@@ -82,13 +67,9 @@ function startGameLoop(room, broadcast) {
       });
     });
 
-    // ────────────────
-    // 7. BROADCAST
-    // ────────────────
     broadcast({
       type: "STATE",
-      players: playersState, 
-      time: Date.now()
+      players: playersState
     });
 
   }, FRAME_TIME);
