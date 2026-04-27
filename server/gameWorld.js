@@ -1,6 +1,8 @@
+const fs = require("fs");
+const path = require("path");
 const logger = require("./logger");
 
-// Referencia a los modelos de MongoDB (se inyectan para evitar dependencia circular)
+// Referencia a los modelos de MongoDB
 let PlayerModel, GameSession, Movement;
 
 function setModels(models) {
@@ -12,23 +14,31 @@ function setModels(models) {
 class GameWorld {
     constructor(room) {
         this.room = room;
-        this.width = 2300;   // 100 tiles × 23px
-        this.height = 1380;  // 60 tiles × 23px
+        
+        // Cargar datos desde los JSON
+        this.gameData = null;
+        this.zonesData = null;
+        this.tileMapData = null;
+        
+        this._loadGameData();
+        
+        // Dimensiones del mundo (se calculan del tilemap)
+        this.width = 2300;
+        this.height = 1380;
         this.viewportWidth = 320;
         this.viewportHeight = 180;
-        this.backgroundColor = "#568BB1"; // Azul océano
+        this.backgroundColor = "#568BB1";
         
-        // Spawn points sobre el suelo principal (Y es hacia abajo en este sistema)
-        this.spawnPoints = [
-            { x: 80, y: 370 },
-            { x: 130, y: 370 },
-            { x: 180, y: 370 },
-            { x: 230, y: 370 },
-            { x: 280, y: 370 },
-            { x: 370, y: 370 },
-            { x: 420, y: 370 },
-            { x: 470, y: 370 }
-        ];
+        // Plataformas, zonas de muerte, etc. (se llenan desde el JSON)
+        this.platforms = [];
+        this.deathZones = [];
+        this.playerZones = [];
+        
+        // Procesar zonas desde el JSON
+        this._processZones();
+        
+        // Spawn points
+        this.spawnPoints = this._calculateSpawnPoints();
         
         // === LLAVE ===
         this.keyX = 170;
@@ -50,7 +60,147 @@ class GameWorld {
         this.coins = [];
         this.generateCoins();
         
-        // === PLATAFORMAS (desde zones.json) ===
+        // Zona de jugador (spawn zone)
+        this.playerZone = this.playerZones.length > 0 
+            ? this.playerZones[0] 
+            : { x: 25, y: 100, width: 400, height: 400 };
+
+        // Estado de la sesión
+        this.currentSessionId = null;
+        this._bonusCoinsSpawned = false;
+
+        this._logWorldInfo();
+    }
+    
+    /**
+     * Cargar archivos JSON del juego
+     */
+    _loadGameData() {
+        try {
+            const gameDataPath = path.join(__dirname, 'game_data.json');
+            if (fs.existsSync(gameDataPath)) {
+                this.gameData = JSON.parse(fs.readFileSync(gameDataPath, 'utf8'));
+                logger.info("📂 game_data.json cargado");
+                
+                // Obtener el primer nivel
+                const level = this.gameData.levels[0];
+                
+                // Configurar viewport desde el JSON
+                if (level.viewportWidth) this.viewportWidth = level.viewportWidth;
+                if (level.viewportHeight) this.viewportHeight = level.viewportHeight;
+                if (level.backgroundColorHex) this.backgroundColor = level.backgroundColorHex;
+                
+                // Cargar tilemap para calcular dimensiones
+                if (level.layers && level.layers[0]) {
+                    const layer = level.layers[0];
+                    const tileMapPath = path.join(__dirname, layer.tileMapFile);
+                    if (fs.existsSync(tileMapPath)) {
+                        this.tileMapData = JSON.parse(fs.readFileSync(tileMapPath, 'utf8'));
+                        this._calculateWorldSize(layer);
+                    }
+                }
+                
+                // Cargar zonas
+                if (level.zonesFile) {
+                    const zonesPath = path.join(__dirname, level.zonesFile);
+                    if (fs.existsSync(zonesPath)) {
+                        this.zonesData = JSON.parse(fs.readFileSync(zonesPath, 'utf8'));
+                        logger.info("📂 Zones cargadas desde " + level.zonesFile);
+                    }
+                }
+            }
+        } catch (error) {
+            logger.warn("⚠️ No se pudieron cargar los archivos JSON: " + error.message);
+            logger.warn("⚠️ Usando configuración por defecto");
+        }
+    }
+    
+    /**
+     * Calcular dimensiones del mundo desde el tilemap
+     */
+    _calculateWorldSize(layer) {
+        if (!this.tileMapData || !this.tileMapData.tileMap) return;
+        
+        const tileMap = this.tileMapData.tileMap;
+        const rows = tileMap.length;
+        const cols = rows > 0 ? tileMap[0].length : 0;
+        const tileW = layer.tilesWidth || 23;
+        const tileH = layer.tilesHeight || 23;
+        
+        this.width = cols * tileW;
+        this.height = rows * tileH;
+        
+        logger.info(`📐 Mundo: ${this.width}x${this.height}px (${cols}x${rows} tiles)`);
+    }
+    
+    /**
+     * Procesar zonas desde el JSON y clasificarlas
+     */
+    _processZones() {
+        if (!this.zonesData || !this.zonesData.zones) {
+            logger.warn("⚠️ No hay zones.json, usando plataformas por defecto");
+            this._useDefaultPlatforms();
+            return;
+        }
+        
+        this.platforms = [];
+        this.deathZones = [];
+        this.playerZones = [];
+        
+        for (const zone of this.zonesData.zones) {
+            const zoneType = (zone.type || "").toLowerCase();
+            const zoneName = (zone.name || "").toLowerCase();
+            
+            const zoneData = {
+                x: zone.x,
+                y: zone.y,
+                width: zone.width,
+                height: zone.height,
+                name: zone.name,
+                type: zone.type,
+                color: zone.color
+            };
+            
+            // Clasificar según el tipo de zona
+            if (zoneType.includes("death") || zoneName.includes("death")) {
+                // Zona de muerte
+                this.deathZones.push(zoneData);
+                logger.info(`   💀 Death Zone: "${zone.name}" (${zone.x}, ${zone.y}) ${zone.width}x${zone.height}`);
+                
+            } else if (zoneType.includes("floor") || 
+                       zoneType.includes("platform") ||
+                       zoneName.includes("suelo") || 
+                       zoneName.includes("plataforma") ||
+                       zoneName.includes("escaleras") ||
+                       zoneName.includes("escalón")) {
+                // Plataforma / Suelo
+                this.platforms.push(zoneData);
+                logger.info(`   🏗️ Platform: "${zone.name}" (${zone.x}, ${zone.y}) ${zone.width}x${zone.height}`);
+                
+            } else if (zoneType.includes("player") || 
+                       zoneName.includes("player") ||
+                       zoneType.includes("spawn")) {
+                // Zona de jugador / Spawn
+                this.playerZones.push(zoneData);
+                logger.info(`   🟢 Player Zone: "${zone.name}" (${zone.x}, ${zone.y}) ${zone.width}x${zone.height}`);
+                
+            } else {
+                // Zona genérica - por defecto es suelo si está en Y baja
+                logger.info(`   ❓ Unknown Zone: "${zone.name}" type="${zone.type}" - ignorada`);
+            }
+        }
+        
+        // Si no hay plataformas, usar las por defecto
+        if (this.platforms.length === 0) {
+            logger.warn("⚠️ No se encontraron plataformas en zones.json");
+            this._useDefaultPlatforms();
+        }
+    }
+    
+    /**
+     * Plataformas por defecto (fallback)
+     */
+    _useDefaultPlatforms() {
         this.platforms = [
             { x: 42, y: 402, width: 246, height: 13, name: "Suelo1" },
             { x: 335, y: 401, width: 168, height: 14, name: "Suelo2" },
@@ -62,41 +212,85 @@ class GameWorld {
             { x: 26, y: 249, width: 16, height: 14, name: "Escalon4" },
             { x: 134, y: 309, width: 16, height: 14, name: "Escalon5" }
         ];
-        
-        // === ZONAS DE MUERTE ===
-        this.deathZones = [
-            { x: -231, y: 436, width: 1664, height: 153, name: "Foso" }
-        ];
-        
-        // === ZONA DE JUGADOR (spawn zone) ===
-        this.playerZone = { x: 25, y: 100, width: 400, height: 400 };
-
-        // === ESTADO DE LA SESIÓN ===
-        this.currentSessionId = null;
-
-        logger.info("🌍 Mundo Ocean World cargado:");
-        logger.info(`   - ${this.platforms.length} plataformas`);
-        logger.info(`   - ${this.coins.length} monedas`);
-        logger.info(`   - Llave en (${this.keyX}, ${this.keyY})`);
-        logger.info(`   - Puerta en (${this.doorX}, ${this.doorY})`);
     }
+    
+    /**
+     * Calcular spawn points desde las zonas de jugador
+     */
+    _calculateSpawnPoints() {
+        // Si hay zonas de jugador definidas, usar la primera como referencia
+        if (this.playerZones.length > 0) {
+            const zone = this.playerZones[0];
+            const points = [];
+            
+            // Distribuir 8 spawns dentro de la zona
+            const spacing = Math.min(zone.width / 9, 50);
+            const startX = zone.x + spacing;
+            const spawnY = zone.y + zone.height - 32; // Sobre el suelo de la zona
+            
+            for (let i = 0; i < 8; i++) {
+                points.push({
+                    x: startX + i * spacing,
+                    y: spawnY
+                });
+            }
+            
+            return points;
+        }
+        
+        // Fallback: calcular desde las plataformas
+        if (this.platforms.length > 0) {
+            const firstPlatform = this.platforms[0];
+            const points = [];
+            const spacing = Math.min(firstPlatform.width / 9, 50);
+            const startX = firstPlatform.x + spacing;
+            const spawnY = firstPlatform.y - 32; // 32px sobre la plataforma
+            
+            for (let i = 0; i < 8; i++) {
+                points.push({
+                    x: startX + i * spacing,
+                    y: spawnY
+                });
+            }
+            
+            return points;
+        }
+        
+        // Fallback absoluto
+        return [
+            { x: 80, y: 370 }, { x: 130, y: 370 },
+            { x: 180, y: 370 }, { x: 230, y: 370 },
+            { x: 280, y: 370 }, { x: 370, y: 370 },
+            { x: 420, y: 370 }, { x: 470, y: 370 }
+        ];
+    }
+    
+    /**
+     * Log de información del mundo
+     */
+    _logWorldInfo() {
+        logger.info("═".repeat(50));
+        logger.info("🌍 Mundo Ocean World cargado desde JSON:");
+        logger.info(`   📐 Dimensiones: ${this.width}x${this.height}px`);
+        logger.info(`   🏗️ Plataformas: ${this.platforms.length}`);
+        logger.info(`   💀 Zonas de muerte: ${this.deathZones.length}`);
+        logger.info(`   🟢 Zonas de jugador: ${this.playerZones.length}`);
+        logger.info(`   🪙 Monedas: ${this.coins.length}`);
+        logger.info(`   🔑 Llave: (${this.keyX}, ${this.keyY})`);
+        logger.info(`   🚪 Puerta: (${this.doorX}, ${this.doorY})`);
+        logger.info(`   🎯 Spawns: ${this.spawnPoints.length}`);
+        logger.info("═".repeat("50"));
+    }
+    
+    // ... (el resto de métodos se mantienen igual: getFloorYAt, isPlayerTouchingKey, etc.)
     
     generateCoins() {
         const coinPositions = [
-            // Camino inicial (suelo principal 1)
             { x: 70, y: 380 }, { x: 110, y: 380 }, { x: 150, y: 380 },
             { x: 190, y: 380 }, { x: 230, y: 380 }, { x: 270, y: 380 },
-            
-            // Plataforma media (cerca de la llave)
             { x: 165, y: 300 }, { x: 185, y: 300 },
-            
-            // Suelo principal 2 (camino a la puerta)
             { x: 370, y: 375 }, { x: 410, y: 375 }, { x: 450, y: 375 },
-            
-            // Plataforma alta (recompensa por escalar)
             { x: 70, y: 255 }, { x: 85, y: 255 },
-            
-            // Cerca de la puerta
             { x: 480, y: 375 }
         ];
         
@@ -113,16 +307,10 @@ class GameWorld {
         }));
     }
     
-    /**
-     * Establece el ID de la sesión actual para registrar movimientos
-     */
     setSessionId(sessionId) {
         this.currentSessionId = sessionId;
     }
     
-    /**
-     * Obtener la Y del suelo en una posición X dada
-     */
     getFloorYAt(x) {
         let floorY = this.height;
         
@@ -137,9 +325,6 @@ class GameWorld {
         return floorY;
     }
     
-    /**
-     * Verificar si un jugador toca la llave
-     */
     isPlayerTouchingKey(player) {
         if (this.keyTaken) return false;
         
@@ -154,24 +339,14 @@ class GameWorld {
                playerTop < this.keyY + this.keyHeight;
     }
     
-    /**
-     * Recoger la llave
-     */
     pickUpKey(player) {
         this.keyTaken = true;
         this.keyHolder = player.id;
         this.doorOpen = true;
         logger.info(`🔑 ¡${player.name} recogió la llave! La puerta se ha abierto.`);
-        
-        // Registrar en MongoDB
-        this._logMovement(player, 'KEY_PICKUP', {
-            keyHolder: player.id
-        });
+        this._logMovement(player, 'KEY_PICKUP', { keyHolder: player.id });
     }
     
-    /**
-     * Soltar la llave (cuando un jugador se desconecta o muere)
-     */
     dropKey(player) {
         this.keyTaken = false;
         this.keyHolder = null;
@@ -179,17 +354,9 @@ class GameWorld {
         this.keyY = Math.round(player.y - 16);
         this.doorOpen = false;
         logger.info(`🔑 Llave soltada en (${this.keyX}, ${this.keyY})`);
-        
-        // Registrar en MongoDB
-        this._logMovement(player, 'KEY_DROP', {
-            keyX: this.keyX,
-            keyY: this.keyY
-        });
+        this._logMovement(player, 'KEY_DROP', { keyX: this.keyX, keyY: this.keyY });
     }
     
-    /**
-     * Verificar si un jugador está en la puerta
-     */
     isPlayerAtDoor(player) {
         const playerCenterX = player.x;
         const playerBottom = player.y;
@@ -200,22 +367,12 @@ class GameWorld {
                playerBottom <= this.doorY + this.doorHeight;
     }
     
-    /**
-     * Jugador pasa por la puerta
-     */
     playerPassDoor(player) {
         player.passedDoor = true;
         logger.info(`🚪 ${player.name} pasó por la puerta`);
-        
-        // Registrar en MongoDB
-        this._logMovement(player, 'DOOR_PASS', {
-            doorOpen: this.doorOpen
-        });
+        this._logMovement(player, 'DOOR_PASS', { doorOpen: this.doorOpen });
     }
     
-    /**
-     * Recoger monedas cercanas al jugador
-     */
     collectCoins(player) {
         const playerLeft = player.x - 16;
         const playerRight = player.x + 16;
@@ -237,13 +394,10 @@ class GameWorld {
                 coin.collectedAt = new Date();
                 player.coins = (player.coins || 0) + coin.value;
                 collectedAny = true;
-                
-                logger.info(`🪙 ${player.name} recogió moneda (+${coin.value}). Total: ${player.coins}`);
             }
         }
         
         if (collectedAny) {
-            // Registrar en MongoDB (una vez por lote de monedas)
             this._logMovement(player, 'COIN_COLLECT', {
                 totalCoins: player.coins,
                 coinValue: 10
@@ -251,16 +405,14 @@ class GameWorld {
         }
     }
     
-    /**
-     * Verificar si un jugador está en zona de muerte
-     */
     isInDeathZone(player) {
-        // Verificar zonas de muerte definidas
+        // Verificar zonas de muerte definidas en el JSON
         for (const zone of this.deathZones) {
-            if (player.y >= zone.y && player.y <= zone.y + zone.height) {
-                if (player.x >= zone.x && player.x <= zone.x + zone.width) {
-                    return true;
-                }
+            if (player.y >= zone.y && 
+                player.y <= zone.y + zone.height &&
+                player.x >= zone.x && 
+                player.x <= zone.x + zone.width) {
+                return true;
             }
         }
         
@@ -272,14 +424,9 @@ class GameWorld {
         return false;
     }
     
-    /**
-     * Reaparecer jugador en el spawn más cercano
-     */
     respawnPlayer(player) {
-        // Registrar muerte
         player.deaths = (player.deaths || 0) + 1;
         
-        // Buscar el spawn más cercano
         let closestSpawn = this.spawnPoints[0];
         let closestDist = Infinity;
         
@@ -291,27 +438,22 @@ class GameWorld {
             }
         }
         
-        // Guardar posición anterior para el log
         const deathX = Math.round(player.x);
         const deathY = Math.round(player.y);
         
-        // Respawn
         player.x = closestSpawn.x;
         player.y = closestSpawn.y;
         player.vy = 0;
         player.vx = 0;
         
-        // Si tenía la llave, la pierde
         if (this.keyHolder === player.id) {
             this.dropKey(player);
         }
         
-        logger.info(`💀 ${player.name} murió en (${deathX}, ${deathY}) → Reaparece en (${closestSpawn.x}, ${closestSpawn.y})`);
+        logger.info(`💀 ${player.name} murió → Reaparece en (${closestSpawn.x}, ${closestSpawn.y})`);
         
-        // Registrar en MongoDB
         this._logMovement(player, 'DEATH', {
-            deathX: deathX,
-            deathY: deathY,
+            deathX, deathY,
             spawnX: closestSpawn.x,
             spawnY: closestSpawn.y,
             totalDeaths: player.deaths,
@@ -319,9 +461,6 @@ class GameWorld {
         });
     }
     
-    /**
-     * Determinar causa de muerte
-     */
     _getDeathCause(x, y) {
         for (const zone of this.deathZones) {
             if (y >= zone.y && y <= zone.y + zone.height &&
@@ -332,12 +471,8 @@ class GameWorld {
         return y > this.height - 50 ? 'fell_off_world' : 'unknown';
     }
     
-    /**
-     * Verificar si todos los jugadores pasaron la puerta
-     */
     allPlayersPassedDoor(room) {
-        if (!room || room.players.size === 0) return false;
-        if (!this.doorOpen) return false;
+        if (!room || room.players.size === 0 || !this.doorOpen) return false;
         
         let allPassed = true;
         room.players.forEach((player) => {
@@ -349,14 +484,9 @@ class GameWorld {
         return allPassed;
     }
     
-    /**
-     * Verificar si se necesita un número mínimo de jugadores para activar algo
-     * (activadores por número de jugadores)
-     */
     checkPlayerCountActivators(room) {
         const playerCount = room ? room.players.size : 0;
         
-        // Ejemplo: Si hay 4+ jugadores, aparecen monedas bonus
         if (playerCount >= 4 && !this._bonusCoinsSpawned) {
             this._spawnBonusCoins();
             this._bonusCoinsSpawned = true;
@@ -369,19 +499,12 @@ class GameWorld {
         };
     }
     
-    /**
-     * Generar monedas bonus (activador por número de jugadores)
-     */
     _spawnBonusCoins() {
         const bonusPositions = [
-            { x: 200, y: 350 },
-            { x: 220, y: 350 },
-            { x: 240, y: 350 },
-            { x: 390, y: 350 },
-            { x: 410, y: 350 }
+            { x: 200, y: 350 }, { x: 220, y: 350 }, { x: 240, y: 350 },
+            { x: 390, y: 350 }, { x: 410, y: 350 }
         ];
         
-        const startIndex = this.coins.length;
         bonusPositions.forEach((pos, index) => {
             this.coins.push({
                 id: `bonus_coin_${index}`,
@@ -390,28 +513,22 @@ class GameWorld {
                 width: 12,
                 height: 12,
                 collected: false,
-                value: 25, // Bonus coins valen más
+                value: 25,
                 collectedBy: null,
                 collectedAt: null,
                 isBonus: true
             });
         });
         
-        logger.info(`🌟 ${bonusPositions.length} monedas bonus generadas (valor: 25 cada una)`);
+        logger.info(`🌟 ${bonusPositions.length} monedas bonus generadas`);
     }
     
-    /**
-     * Completar el nivel
-     */
     completeLevel(room) {
         this.levelCompleted = true;
         room.setState("completed");
         
-        // Contar monedas totales
         let totalCoins = 0;
-        room.players.forEach(p => {
-            totalCoins += (p.coins || 0);
-        });
+        room.players.forEach(p => { totalCoins += (p.coins || 0); });
         
         const totalAvailable = this.coins.reduce((sum, c) => sum + c.value, 0);
         const elapsedTime = this.getElapsedTime(room);
@@ -423,7 +540,6 @@ class GameWorld {
         logger.info(`   👥 Jugadores: ${room.players.size}`);
         logger.info("═".repeat(50));
         
-        // Registrar para cada jugador
         room.players.forEach((player) => {
             if (!player.isVisor) {
                 this._logMovement(player, 'LEVEL_COMPLETE', {
@@ -437,63 +553,45 @@ class GameWorld {
         return {
             completed: true,
             time: elapsedTime,
-            totalCoins: totalCoins,
-            totalAvailable: totalAvailable,
+            totalCoins,
+            totalAvailable,
             playerCount: room.players.size
         };
     }
     
-    /**
-     * Obtener tiempo transcurrido de la sesión
-     */
     getElapsedTime(room) {
         if (!room || !room.startTime) return 0;
         return Math.round((Date.now() - room.startTime) / 1000);
     }
     
-    /**
-     * Reiniciar el mundo para una nueva partida
-     */
     reset() {
         this.keyTaken = false;
         this.keyHolder = null;
         this.doorOpen = false;
         this.levelCompleted = false;
         this._bonusCoinsSpawned = false;
-        
-        // Resetear monedas
         this.coins = [];
         this.generateCoins();
-        
-        logger.info("🔄 Mundo reiniciado para nueva partida");
+        logger.info("🔄 Mundo reiniciado");
     }
     
-    /**
-     * Obtener estado completo del mundo para enviar a clientes
-     */
     getState() {
         return {
             key: {
-                x: this.keyX,
-                y: this.keyY,
-                width: this.keyWidth,
-                height: this.keyHeight,
+                x: this.keyX, y: this.keyY,
+                width: this.keyWidth, height: this.keyHeight,
                 taken: this.keyTaken,
                 holderId: this.keyHolder
             },
             door: {
-                x: this.doorX,
-                y: this.doorY,
-                width: this.doorWidth,
-                height: this.doorHeight,
+                x: this.doorX, y: this.doorY,
+                width: this.doorWidth, height: this.doorHeight,
                 open: this.doorOpen
             },
             coins: this.coins
                 .filter(c => !c.collected)
                 .map(c => ({
-                    id: c.id,
-                    x: c.x,
-                    y: c.y,
+                    id: c.id, x: c.x, y: c.y,
                     value: c.value,
                     isBonus: c.isBonus || false
                 })),
@@ -512,34 +610,24 @@ class GameWorld {
         };
     }
     
-    /**
-     * Obtener estadísticas para el ERP
-     */
     getStats() {
         const totalCoinsCollected = this.coins.filter(c => c.collected).length;
         const totalCoinsValue = this.coins
             .filter(c => c.collected)
             .reduce((sum, c) => sum + c.value, 0);
-        const bonusCoinsCollected = this.coins
-            .filter(c => c.collected && c.isBonus).length;
         
         return {
             totalCoinsAvailable: this.coins.length,
-            totalCoinsCollected: totalCoinsCollected,
-            totalCoinsValue: totalCoinsValue,
-            bonusCoinsCollected: bonusCoinsCollected,
+            totalCoinsCollected,
+            totalCoinsValue,
             keyCollected: this.keyTaken,
             doorOpened: this.doorOpen,
             levelCompleted: this.levelCompleted
         };
     }
     
-    /**
-     * Registrar movimiento en MongoDB (interno)
-     */
     async _logMovement(player, action, data = {}) {
-        if (!this.currentSessionId) return;
-        if (!Movement) return; // MongoDB no disponible
+        if (!this.currentSessionId || !Movement) return;
         
         try {
             await Movement.create({
@@ -555,12 +643,10 @@ class GameWorld {
                 timestamp: new Date()
             });
         } catch (error) {
-            // No detener el juego por error de logging
             logger.error(`Error registrando movimiento: ${error.message}`);
         }
     }
 }
 
-// Exportar clase y función para inyectar modelos
 module.exports = GameWorld;
 module.exports.setModels = setModels;
