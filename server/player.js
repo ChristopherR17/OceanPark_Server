@@ -1,25 +1,34 @@
 class Player {
-  constructor(id, name, ws) {
-    this.id = id;
-    this.name = name;
-    this.ws = ws;
+    constructor(id, name, ws) {
+        this.id = id;
+        this.name = name;
+        this.ws = ws;
 
-    this.x = 0;
-    this.y = 0;
+        // Posición
+        this.x = 0;
+        this.y = 0;
 
-    this.vx = 0;
-    this.vy = 0;
+        // Velocidad
+        this.vx = 0;
+        this.vy = 0;
 
-    this.input = { 
-      left: false, 
-      right: false, 
-      jump: false 
-    };
+        // Input
+        this.input = { 
+            left: false, 
+            right: false, 
+            jump: false 
+        };
 
-    this.onGround = true;
-
-    this.state = "IDLE";
-    this.dir = "RIGHT";
-  }
+        // Estado
+        this.onGround = true;
+        this.state = "IDLE";
+        this.facingRight = true;
+        this.isVisor = false;
+        
+        // Progreso
+        this.coins = 0;
+        this.passedDoor = false;
+    }
 }
+
 module.exports = Player;
