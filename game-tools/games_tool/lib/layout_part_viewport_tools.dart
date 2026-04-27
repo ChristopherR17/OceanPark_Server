@@ -160,9 +160,6 @@ extension _LayoutViewportTools on _LayoutState {
     if (appData.selectedSection != 'tilemap') {
       return SystemMouseCursors.basic;
     }
-    if (_layersHandToolActive) {
-      return SystemMouseCursors.basic;
-    }
     if (_isDragGestureActive) {
       return SystemMouseCursors.basic;
     }
@@ -174,30 +171,6 @@ extension _LayoutViewportTools on _LayoutState {
       return SystemMouseCursors.copy;
     }
     return SystemMouseCursors.basic;
-  }
-
-  bool get _layersArrowToolActive =>
-      _layersCanvasTool == _LayersCanvasTool.arrow;
-  bool get _layersHandToolActive => _layersCanvasTool == _LayersCanvasTool.hand;
-
-  Widget _buildLayersToolPicker() {
-    return SizedBox(
-      width: 80,
-      child: CDKPickerButtonsBar(
-        selectedStates: <bool>[_layersArrowToolActive, _layersHandToolActive],
-        options: const [
-          Icon(CupertinoIcons.cursor_rays),
-          Icon(CupertinoIcons.hand_raised),
-        ],
-        onChanged: (states) {
-          setState(() {
-            _layersCanvasTool = states.length > 1 && states[1] == true
-                ? _LayersCanvasTool.hand
-                : _LayersCanvasTool.arrow;
-          });
-        },
-      ),
-    );
   }
 
   Widget _buildWorldResetButton(AppData appData, Size viewportSize) {
@@ -213,13 +186,8 @@ extension _LayoutViewportTools on _LayoutState {
   }
 
   Widget _buildWorldTopControlsOverlay(AppData appData, Size viewportSize) {
-    final bool showToolPicker = appData.selectedSection == 'layers' ||
-        appData.selectedSection == 'tilemap' ||
-        appData.selectedSection == 'zones' ||
-        appData.selectedSection == 'sprites' ||
-        appData.selectedSection == 'paths';
     final bool showReset = _usesWorldViewportSection(appData.selectedSection);
-    if (!showToolPicker && !showReset) {
+    if (!showReset) {
       return const SizedBox.shrink();
     }
     return Align(
@@ -229,15 +197,7 @@ extension _LayoutViewportTools on _LayoutState {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (showReset)
-              _buildWorldResetButton(appData, viewportSize)
-            else
-              const SizedBox.shrink(),
-            const Spacer(),
-            if (showToolPicker)
-              _buildLayersToolPicker()
-            else
-              const SizedBox.shrink(),
+            _buildWorldResetButton(appData, viewportSize),
           ],
         ),
       ),

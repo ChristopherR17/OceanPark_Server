@@ -37,11 +37,11 @@ dependencies:
   archive: any
   provider: any
   http: any
+  file_picker: any
   path_provider: any
   web_socket_channel: any
   window_manager: ^0.5.1
   flutter_cupertino_desktop_kit: ^0.0.19
-  file_picker: ^8.0.0
 
 dev_dependencies:
   flutter_test:

@@ -22,9 +22,6 @@ extension _LayoutGestures on _LayoutState {
       _didModifyPathDuringGesture = false;
       _isDraggingPathPoint = false;
       _draggingPathPointIndex = -1;
-      if (_layersHandToolActive) {
-        return;
-      }
       final int hitPointIndex = LayoutUtils.pathPointIndexFromPosition(
         appData,
         details.localPosition,
@@ -59,15 +56,15 @@ extension _LayoutGestures on _LayoutState {
       _isDraggingLayer = false;
       _didModifyLayerDuringGesture = false;
       _layerDragOffsetsByIndex.clear();
-      if (_layersHandToolActive) {
-        return;
-      }
       final int hitLayerIndex = LayoutUtils.selectLayerFromPosition(
         appData,
         details.localPosition,
       );
       final bool additiveSelection = _isLayerSelectionModifierPressed();
       if (hitLayerIndex == -1) {
+        if (!additiveSelection) {
+          return;
+        }
         _isMarqueeSelectingLayers = true;
         _marqueeSelectionAdditive = additiveSelection;
         _layersMarqueeStartLocal = details.localPosition;
@@ -106,11 +103,6 @@ extension _LayoutGestures on _LayoutState {
       }
     } else if (appData.selectedSection == "tilemap") {
       _consumeTilemapTapUp = false;
-      if (_layersHandToolActive) {
-        _isPaintingTilemap = false;
-        _didModifyTilemapDuringGesture = false;
-        return;
-      }
       if (_isLayerSelectionModifierPressed()) {
         _isPaintingTilemap = false;
         _didModifyTilemapDuringGesture = false;
@@ -152,9 +144,6 @@ extension _LayoutGestures on _LayoutState {
       _isDraggingZone = false;
       _isResizingZone = false;
       _zoneDragOffsetsByIndex.clear();
-      if (_layersHandToolActive) {
-        return;
-      }
       final bool additiveSelection = _isLayerSelectionModifierPressed();
       final int selectedZone = appData.selectedZone;
       final bool startsOnResizeHandle = !additiveSelection &&
@@ -179,6 +168,9 @@ extension _LayoutGestures on _LayoutState {
         details.localPosition,
       );
       if (hitZone == -1) {
+        if (!additiveSelection) {
+          return;
+        }
         _isMarqueeSelectingZones = true;
         _zoneMarqueeSelectionAdditive = additiveSelection;
         _zonesMarqueeStartLocal = details.localPosition;
@@ -221,15 +213,15 @@ extension _LayoutGestures on _LayoutState {
       _didModifySpriteDuringGesture = false;
       _isDraggingSprite = false;
       _spriteDragOffsetsByIndex.clear();
-      if (_layersHandToolActive) {
-        return;
-      }
       final int hitSpriteIndex = LayoutUtils.spriteIndexFromPosition(
         appData,
         details.localPosition,
       );
       final bool additiveSelection = _isLayerSelectionModifierPressed();
       if (hitSpriteIndex == -1) {
+        if (!additiveSelection) {
+          return;
+        }
         _isMarqueeSelectingSprites = true;
         _spriteMarqueeSelectionAdditive = additiveSelection;
         _spritesMarqueeStartLocal = details.localPosition;
@@ -391,9 +383,6 @@ extension _LayoutGestures on _LayoutState {
           _didModifyPathDuringGesture = true;
           appData.update();
         }
-      } else if (_layersHandToolActive) {
-        appData.layersViewOffset += details.delta;
-        appData.update();
       }
     } else if (appData.selectedSection == "viewport") {
       if (!_isPointerDown) {
@@ -403,9 +392,6 @@ extension _LayoutGestures on _LayoutState {
         appData.update();
       } else if (_isDraggingViewport) {
         LayoutUtils.dragViewportFromCanvas(appData, details.localPosition);
-        appData.update();
-      } else {
-        appData.layersViewOffset += details.delta;
         appData.update();
       }
     } else if (appData.selectedSection == "layers") {
@@ -429,18 +415,10 @@ extension _LayoutGestures on _LayoutState {
           _didModifyLayerDuringGesture = true;
           appData.update();
         }
-      } else if (_layersHandToolActive) {
-        appData.layersViewOffset += details.delta;
-        appData.update();
       } else {
         // Arrow tool: no world navigation.
       }
     } else if (appData.selectedSection == "tilemap") {
-      if (_layersHandToolActive) {
-        appData.layersViewOffset += details.delta;
-        appData.update();
-        return;
-      }
       if (_hasMultipleLayersSelected(
         appData,
       )) {
@@ -473,8 +451,6 @@ extension _LayoutGestures on _LayoutState {
           _didModifyTilemapDuringGesture = true;
           appData.update();
         }
-      } else {
-        // Arrow tool: no world navigation.
       }
     } else if (appData.selectedSection == "zones") {
       if (!_isPointerDown) {
@@ -504,9 +480,6 @@ extension _LayoutGestures on _LayoutState {
           appData.update();
           layoutZonesKey.currentState?.updateForm(appData);
         }
-      } else if (_layersHandToolActive) {
-        appData.layersViewOffset += details.delta;
-        appData.update();
       } else {
         // Arrow tool: no world navigation.
       }
@@ -533,9 +506,6 @@ extension _LayoutGestures on _LayoutState {
           appData.update();
           layoutSpritesKey.currentState?.updateForm(appData);
         }
-      } else if (_layersHandToolActive) {
-        appData.layersViewOffset += details.delta;
-        appData.update();
       } else {
         // Arrow tool: no world navigation.
       }
@@ -712,9 +682,6 @@ extension _LayoutGestures on _LayoutState {
 
   void _handleTapDown(AppData appData, TapDownDetails details) {
     if (appData.selectedSection == "layers") {
-      if (_layersHandToolActive) {
-        return;
-      }
       final int hitLayerIndex = LayoutUtils.selectLayerFromPosition(
         appData,
         details.localPosition,
@@ -751,9 +718,6 @@ extension _LayoutGestures on _LayoutState {
         appData.update();
       }
     } else if (appData.selectedSection == "tilemap") {
-      if (_layersHandToolActive) {
-        return;
-      }
       final bool additiveSelection = _isLayerSelectionModifierPressed();
       _consumeTilemapTapUp = false;
       if (!additiveSelection) {
@@ -782,9 +746,6 @@ extension _LayoutGestures on _LayoutState {
         appData.update();
       }
     } else if (appData.selectedSection == "zones") {
-      if (_layersHandToolActive) {
-        return;
-      }
       if (appData.selectedZone != -1 &&
           _selectedZoneIndices.length == 1 &&
           LayoutUtils.isPointInZoneResizeHandle(
@@ -831,9 +792,6 @@ extension _LayoutGestures on _LayoutState {
         layoutZonesKey.currentState?.updateForm(appData);
       }
     } else if (appData.selectedSection == "sprites") {
-      if (_layersHandToolActive) {
-        return;
-      }
       final int hitSpriteIndex = LayoutUtils.spriteIndexFromPosition(
         appData,
         details.localPosition,
@@ -950,9 +908,6 @@ extension _LayoutGestures on _LayoutState {
     if (appData.selectedSection == "tilemap") {
       if (_consumeTilemapTapUp) {
         _consumeTilemapTapUp = false;
-        return;
-      }
-      if (_layersHandToolActive) {
         return;
       }
       if (_isLayerSelectionModifierPressed()) {

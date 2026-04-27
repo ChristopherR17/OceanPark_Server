@@ -1,11 +1,24 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart' show PointerScrollEvent;
+import 'package:flutter/gestures.dart'
+    show
+        PointerCancelEvent,
+        PointerDownEvent,
+        PointerMoveEvent,
+        PointerPanZoomEndEvent,
+        PointerPanZoomStartEvent,
+        PointerPanZoomUpdateEvent,
+        PointerScaleEvent,
+        PointerScrollEvent,
+        PointerUpEvent,
+        kSecondaryMouseButton;
 import 'package:flutter/material.dart' show Tooltip;
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart'
     show
         HardwareKeyboard,
@@ -64,12 +77,13 @@ class Layout extends StatefulWidget {
   State<Layout> createState() => _LayoutState();
 }
 
-enum _LayersCanvasTool { arrow, hand }
-
 class _LayoutState extends State<Layout> {
   static const double _animationRigFrameStripReservedHeight = 74.0;
   static const double _editToolbarExpandedWidth = 275.0;
   static const double _rightToolbarWidth = 275.0;
+  static const double _trackpadInertiaDecayPerSecond = 7.5;
+  static const double _trackpadInertiaMinStartSpeed = 600.0;
+  static const double _trackpadInertiaStopSpeed = 30.0;
   final ScrollController _editToolbarScrollController = ScrollController();
 
   // Clau del layout escollit
@@ -123,13 +137,17 @@ class _LayoutState extends State<Layout> {
   Offset _animationRigHitBoxDragOffset = Offset.zero;
   int _drawCanvasRequestId = 0;
   bool _isPointerDown = false;
+  double _lastTrackpadScale = 1.0;
+  Duration? _lastTrackpadPanTimeStamp;
+  Offset _trackpadPanVelocity = Offset.zero;
+  Ticker? _trackpadInertiaTicker;
+  Duration? _trackpadInertiaLastElapsed;
+  int? _secondaryMousePanPointer;
   bool _isHoveringSelectedTilemapLayer = false;
   bool _isDragGestureActive = false;
   bool _pendingLayersViewportCenter = false;
   int? _pendingLevelsViewportFitLevelIndex;
   int? _lastAutoFramedLevelIndex;
-  bool _selectionModifierShiftPressed = false;
-  bool _selectionModifierAltPressed = false;
   bool _selectionModifierControlPressed = false;
   bool _selectionModifierMetaPressed = false;
   final Set<int> _selectedLayerIndices = <int>{};
@@ -162,7 +180,6 @@ class _LayoutState extends State<Layout> {
   bool _clipboardStatusIsWarning = false;
   Timer? _clipboardStatusTimer;
   final FocusNode _focusNode = FocusNode();
-  _LayersCanvasTool _layersCanvasTool = _LayersCanvasTool.hand;
   List<String> sections = [
     'projects',
     'media',
@@ -215,6 +232,7 @@ class _LayoutState extends State<Layout> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    _trackpadInertiaTicker?.dispose();
     try {
       final appData = Provider.of<AppData>(context, listen: false);
       unawaited(appData.flushPendingAutosave());
@@ -274,9 +292,8 @@ class _LayoutState extends State<Layout> {
         return false;
       }
     }
-    final bool isDeleteKey =
-        event.logicalKey == LogicalKeyboardKey.backspace ||
-            event.logicalKey == LogicalKeyboardKey.delete;
+    final bool isDeleteKey = event.logicalKey == LogicalKeyboardKey.backspace ||
+        event.logicalKey == LogicalKeyboardKey.delete;
     if (isDeleteKey && !_isTextInputFocused()) {
       try {
         final AppData appData = Provider.of<AppData>(context, listen: false);
@@ -356,30 +373,12 @@ class _LayoutState extends State<Layout> {
       return;
     }
     final LogicalKeyboardKey key = event.logicalKey;
-    if (_isShiftModifierKey(key)) {
-      _selectionModifierShiftPressed = pressed;
-    }
-    if (_isAltModifierKey(key)) {
-      _selectionModifierAltPressed = pressed;
-    }
     if (_isControlModifierKey(key)) {
       _selectionModifierControlPressed = pressed;
     }
     if (_isMetaModifierKey(key)) {
       _selectionModifierMetaPressed = pressed;
     }
-  }
-
-  bool _isShiftModifierKey(LogicalKeyboardKey key) {
-    return key == LogicalKeyboardKey.shift ||
-        key == LogicalKeyboardKey.shiftLeft ||
-        key == LogicalKeyboardKey.shiftRight;
-  }
-
-  bool _isAltModifierKey(LogicalKeyboardKey key) {
-    return key == LogicalKeyboardKey.alt ||
-        key == LogicalKeyboardKey.altLeft ||
-        key == LogicalKeyboardKey.altRight;
   }
 
   bool _isControlModifierKey(LogicalKeyboardKey key) {
@@ -395,17 +394,17 @@ class _LayoutState extends State<Layout> {
         key == LogicalKeyboardKey.superKey;
   }
 
+  bool _isPlatformShortcutModifierPressed() {
+    final HardwareKeyboard keyboard = HardwareKeyboard.instance;
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      return _selectionModifierMetaPressed || keyboard.isMetaPressed;
+    }
+    return _selectionModifierControlPressed || keyboard.isControlPressed;
+  }
+
   void _refreshSelectionModifierState() {
     final HardwareKeyboard keyboard = HardwareKeyboard.instance;
     final Set<LogicalKeyboardKey> pressed = keyboard.logicalKeysPressed;
-    _selectionModifierShiftPressed = keyboard.isShiftPressed ||
-        pressed.contains(LogicalKeyboardKey.shift) ||
-        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
-        pressed.contains(LogicalKeyboardKey.shiftRight);
-    _selectionModifierAltPressed = keyboard.isAltPressed ||
-        pressed.contains(LogicalKeyboardKey.alt) ||
-        pressed.contains(LogicalKeyboardKey.altLeft) ||
-        pressed.contains(LogicalKeyboardKey.altRight);
     _selectionModifierControlPressed = keyboard.isControlPressed ||
         pressed.contains(LogicalKeyboardKey.control) ||
         pressed.contains(LogicalKeyboardKey.controlLeft) ||
@@ -486,6 +485,173 @@ class _LayoutState extends State<Layout> {
         cursor + (appData.layersViewOffset - cursor) * (newScale / oldScale);
     appData.layersViewScale = newScale;
     appData.update();
+  }
+
+  void _applyLayersPinchZoom(
+      AppData appData, Offset cursor, double scaleDelta) {
+    if (scaleDelta <= 0 || (scaleDelta - 1.0).abs() < 0.0001) {
+      return;
+    }
+    const double minScale = 0.05;
+    const double maxScale = 20.0;
+    final double oldScale = appData.layersViewScale;
+    final double newScale = (oldScale * scaleDelta).clamp(minScale, maxScale);
+    appData.layersViewOffset =
+        cursor + (appData.layersViewOffset - cursor) * (newScale / oldScale);
+    appData.layersViewScale = newScale;
+    appData.update();
+  }
+
+  void _panWorldViewport(AppData appData, Offset delta) {
+    if (delta == Offset.zero ||
+        !_usesWorldViewportSection(appData.selectedSection)) {
+      return;
+    }
+    appData.layersViewOffset += delta;
+    appData.update();
+  }
+
+  Offset _scaleOffset(Offset offset, double factor) {
+    return Offset(offset.dx * factor, offset.dy * factor);
+  }
+
+  void _stopTrackpadInertia({bool resetVelocity = true}) {
+    _trackpadInertiaTicker?.stop();
+    _trackpadInertiaLastElapsed = null;
+    if (resetVelocity) {
+      _trackpadPanVelocity = Offset.zero;
+      _lastTrackpadPanTimeStamp = null;
+    }
+  }
+
+  void _recordTrackpadPanVelocitySample(PointerPanZoomUpdateEvent event) {
+    if (event.panDelta == Offset.zero) {
+      return;
+    }
+    final Duration? previousTimeStamp = _lastTrackpadPanTimeStamp;
+    _lastTrackpadPanTimeStamp = event.timeStamp;
+    if (previousTimeStamp == null) {
+      return;
+    }
+    final int deltaMicros =
+        event.timeStamp.inMicroseconds - previousTimeStamp.inMicroseconds;
+    if (deltaMicros <= 0) {
+      return;
+    }
+    final double dtSeconds = deltaMicros / Duration.microsecondsPerSecond;
+    final Offset sampleVelocity = Offset(
+      event.panDelta.dx / dtSeconds,
+      event.panDelta.dy / dtSeconds,
+    );
+    final bool hadVelocity = _trackpadPanVelocity != Offset.zero;
+    _trackpadPanVelocity = Offset.lerp(
+          _trackpadPanVelocity,
+          sampleVelocity,
+          hadVelocity ? 0.35 : 1.0,
+        ) ??
+        sampleVelocity;
+  }
+
+  void _startTrackpadInertia(AppData appData) {
+    if (_trackpadPanVelocity.distance < _trackpadInertiaMinStartSpeed) {
+      _stopTrackpadInertia();
+      return;
+    }
+    _trackpadInertiaTicker ??= Ticker((Duration elapsed) {
+      if (!mounted) {
+        _stopTrackpadInertia();
+        return;
+      }
+      if (_trackpadInertiaLastElapsed == null) {
+        _trackpadInertiaLastElapsed = elapsed;
+        return;
+      }
+      final int elapsedMicros =
+          elapsed.inMicroseconds - _trackpadInertiaLastElapsed!.inMicroseconds;
+      _trackpadInertiaLastElapsed = elapsed;
+      if (elapsedMicros <= 0) {
+        return;
+      }
+      final double dtSeconds = elapsedMicros / Duration.microsecondsPerSecond;
+      _panWorldViewport(appData, _scaleOffset(_trackpadPanVelocity, dtSeconds));
+      final double decay =
+          math.exp(-_trackpadInertiaDecayPerSecond * dtSeconds);
+      _trackpadPanVelocity = _scaleOffset(_trackpadPanVelocity, decay);
+      if (_trackpadPanVelocity.distance < _trackpadInertiaStopSpeed) {
+        _stopTrackpadInertia();
+      }
+    });
+    _trackpadInertiaLastElapsed = null;
+    _trackpadInertiaTicker!.start();
+  }
+
+  void _handlePointerDownForViewportPan(
+    AppData appData,
+    PointerDownEvent event,
+  ) {
+    _stopTrackpadInertia();
+    if (event.kind != ui.PointerDeviceKind.mouse ||
+        !_usesWorldViewportSection(appData.selectedSection) ||
+        (event.buttons & kSecondaryMouseButton) == 0) {
+      return;
+    }
+    _secondaryMousePanPointer = event.pointer;
+  }
+
+  void _handlePointerMoveForViewportPan(
+    AppData appData,
+    PointerMoveEvent event,
+  ) {
+    if (_secondaryMousePanPointer != event.pointer ||
+        event.kind != ui.PointerDeviceKind.mouse ||
+        (event.buttons & kSecondaryMouseButton) == 0) {
+      return;
+    }
+    _panWorldViewport(appData, event.delta);
+  }
+
+  void _handlePointerUpForViewportPan(PointerUpEvent event) {
+    if (_secondaryMousePanPointer == event.pointer) {
+      _secondaryMousePanPointer = null;
+    }
+  }
+
+  void _handlePointerCancelForViewportPan(PointerCancelEvent event) {
+    if (_secondaryMousePanPointer == event.pointer) {
+      _secondaryMousePanPointer = null;
+    }
+  }
+
+  void _handleTrackpadPanZoomUpdate(
+    AppData appData,
+    PointerPanZoomUpdateEvent event,
+  ) {
+    if (!_usesWorldViewportSection(appData.selectedSection)) {
+      return;
+    }
+    final double scaleDelta = event.scale / _lastTrackpadScale;
+    _lastTrackpadScale = event.scale;
+    final bool hasPinchScale = (scaleDelta - 1.0).abs() >= 0.0001;
+
+    if (event.panDelta != Offset.zero) {
+      _recordTrackpadPanVelocitySample(event);
+      _panWorldViewport(appData, event.panDelta);
+    }
+    if (!hasPinchScale) {
+      return;
+    }
+    _applyLayersPinchZoom(appData, event.localPosition, scaleDelta);
+  }
+
+  void _handleTrackpadScaleSignal(
+    AppData appData,
+    PointerScaleEvent event,
+  ) {
+    if (!_usesWorldViewportSection(appData.selectedSection)) {
+      return;
+    }
+    _stopTrackpadInertia();
+    _applyLayersPinchZoom(appData, event.localPosition, event.scale);
   }
 
   Future<void> _autoSaveIfPossible(AppData appData) async {
@@ -735,18 +901,62 @@ class _LayoutState extends State<Layout> {
                                             ? _animationRigFrameStripReservedHeight
                                             : 0,
                                         child: Listener(
-                                          onPointerDown: (_) => {
-                                            _isPointerDown = true,
-                                            _focusNode.requestFocus(),
-                                            _refreshSelectionModifierState(),
+                                          onPointerDown:
+                                              (PointerDownEvent event) {
+                                            _isPointerDown = true;
+                                            _focusNode.requestFocus();
+                                            _refreshSelectionModifierState();
+                                            _handlePointerDownForViewportPan(
+                                              appData,
+                                              event,
+                                            );
                                           },
-                                          onPointerUp: (_) =>
-                                              _isPointerDown = false,
-                                          onPointerCancel: (_) =>
-                                              _isPointerDown = false,
-                                          // macOS trackpad: two-finger scroll → PointerScrollEvent
+                                          onPointerMove:
+                                              (PointerMoveEvent event) {
+                                            _handlePointerMoveForViewportPan(
+                                              appData,
+                                              event,
+                                            );
+                                          },
+                                          onPointerUp: (PointerUpEvent event) {
+                                            _isPointerDown = false;
+                                            _handlePointerUpForViewportPan(
+                                              event,
+                                            );
+                                          },
+                                          onPointerCancel:
+                                              (PointerCancelEvent event) {
+                                            _isPointerDown = false;
+                                            _handlePointerCancelForViewportPan(
+                                              event,
+                                            );
+                                          },
+                                          onPointerPanZoomStart:
+                                              (PointerPanZoomStartEvent _) {
+                                            _stopTrackpadInertia();
+                                            _lastTrackpadScale = 1.0;
+                                            _lastTrackpadPanTimeStamp = null;
+                                            _trackpadPanVelocity = Offset.zero;
+                                          },
+                                          onPointerPanZoomEnd:
+                                              (PointerPanZoomEndEvent _) {
+                                            _startTrackpadInertia(appData);
+                                            _lastTrackpadScale = 1.0;
+                                            _lastTrackpadPanTimeStamp = null;
+                                          },
                                           onPointerSignal: (event) {
+                                            if (event is PointerScaleEvent) {
+                                              _handleTrackpadScaleSignal(
+                                                appData,
+                                                event,
+                                              );
+                                              return;
+                                            }
                                             if (event is! PointerScrollEvent) {
+                                              return;
+                                            }
+                                            if (event.kind !=
+                                                ui.PointerDeviceKind.mouse) {
                                               return;
                                             }
                                             if (appData.selectedSection != "levels" &&
@@ -769,29 +979,13 @@ class _LayoutState extends State<Layout> {
                                                 event.localPosition,
                                                 event.scrollDelta.dy);
                                           },
-                                          // macOS trackpad: two-finger pan-zoom → PointerPanZoomUpdateEvent
-                                          onPointerPanZoomUpdate: (event) {
-                                            if (appData.selectedSection != "levels" &&
-                                                appData.selectedSection !=
-                                                    "layers" &&
-                                                appData.selectedSection !=
-                                                    "tilemap" &&
-                                                appData.selectedSection !=
-                                                    "zones" &&
-                                                appData.selectedSection !=
-                                                    "sprites" &&
-                                                appData.selectedSection !=
-                                                    "paths" &&
-                                                appData.selectedSection !=
-                                                    "viewport") {
-                                              return;
-                                            }
-                                            // pan delta from trackpad scroll
-                                            final double dy =
-                                                -event.panDelta.dy;
-                                            if (dy == 0) return;
-                                            _applyLayersZoom(appData,
-                                                event.localPosition, dy);
+                                          onPointerPanZoomUpdate:
+                                              (PointerPanZoomUpdateEvent
+                                                  event) {
+                                            _handleTrackpadPanZoomUpdate(
+                                              appData,
+                                              event,
+                                            );
                                           },
                                           child: MouseRegion(
                                             cursor: _tilemapCursor(appData),

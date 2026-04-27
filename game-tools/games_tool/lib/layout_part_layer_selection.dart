@@ -3,15 +3,7 @@ part of 'layout.dart';
 /// Layer selection, marquee, dragging, and deletion.
 extension _LayoutLayerSelection on _LayoutState {
   bool _isLayerSelectionModifierPressed() {
-    final HardwareKeyboard keyboard = HardwareKeyboard.instance;
-    return _selectionModifierShiftPressed ||
-        _selectionModifierAltPressed ||
-        _selectionModifierControlPressed ||
-        _selectionModifierMetaPressed ||
-        keyboard.isShiftPressed ||
-        keyboard.isAltPressed ||
-        keyboard.isControlPressed ||
-        keyboard.isMetaPressed;
+    return _isPlatformShortcutModifierPressed();
   }
 
   Offset _depthProjectionImageOffsetForLayer(AppData appData, GameLayer layer) {
