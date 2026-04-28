@@ -179,47 +179,26 @@ function handleMove(id, data) {
     const player = room.players.get(id);
     if (!player) return;
 
-    const prevLeft = player.input.left;
-    const prevRight = player.input.right;
-    const prevJump = player.input.jump;
+    // Guardamos estado previo para el log
+    const { left: pL, right: pR, jump: pJ } = player.input;
 
-    // Actualizar input (compatible con ambos formatos)
-    if (data.left !== undefined) {
-        player.input.left = !!data.left;
-    } else if (data.dir === "LEFT") {
-        player.input.left = true;
-        player.input.right = false;
-    } else {
-        player.input.left = false;
-    }
+    // Asignación directa de los valores que vienen del cliente
+    if (data.LEFT !== undefined) player.input.left = data.LEFT;
+    if (data.RIGHT !== undefined) player.input.right = data.RIGHT;
+    if (data.JUMP !== undefined) player.input.jump = data.JUMP;
 
-    if (data.right !== undefined) {
-        player.input.right = !!data.right;
-    } else if (data.dir === "RIGHT") {
-        player.input.right = true;
-        player.input.left = false;
-    } else if (data.dir !== undefined && data.dir !== "LEFT") {
-        player.input.right = false;
-    }
+    // Detectar si hubo cambios comparando estado actual vs previo
+    const changed = pL !== player.input.left || 
+                    pR !== player.input.right || 
+                    pJ !== player.input.jump;
 
-    // Salto (evento, no estado)
-    if (data.jump === true || data.dir === "JUMP" || data.dir === "UP") {
-        player.input.jump = true;
-    }
-
-    // LOG inteligente
-    let acciones = [];
-    if (player.input.left) acciones.push("⬅️ Izquierda");
-    if (player.input.right) acciones.push("➡️ Derecha");
-    if (player.input.jump) acciones.push("⬆️ Salto");
-    if (acciones.length === 0) acciones.push("🛑 Parado");
-    
-    const changed = prevLeft !== player.input.left || 
-                    prevRight !== player.input.right || 
-                    prevJump !== player.input.jump;
-    
     if (changed) {
-        logger.info(`🏃 ${player.name}: ${acciones.join(" + ")}`);
+        let estado = [];
+        if (player.input.left) estado.push("⬅️ Izquierda");
+        if (player.input.right) estado.push("➡️ Derecha");
+        if (player.input.jump) estado.push("⬆️ Salto");
+        
+        logger.info(`🏃 ${player.name}: ${estado.length ? estado.join(" + ") : "🛑 Parado"}`);
     }
 }
 
