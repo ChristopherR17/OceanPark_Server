@@ -16,12 +16,42 @@ Server:
 
 
 json
-{
-    type: Move
-    value: left
-}
+{"type": "MOVE", "left": "true"}
+
+{"type": "JOIN", "name": "player"}
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+wscat -c ws://localhost:3000
+
+{"type":"MOVE","right":true}
+
+{"type":"JOIN","name":"Player1"}
+
+{"type":"JOIN","name":"Player2"}
 
 ================================
 EXPLICACION
