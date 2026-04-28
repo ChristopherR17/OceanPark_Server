@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const playerSchema = new mongoose.Schema({
-    // Identificación
     playerId: {
         type: String,
         required: true,
@@ -14,46 +13,37 @@ const playerSchema = new mongoose.Schema({
         trim: true,
         maxlength: 16
     },
-    
-    // Categoría del jugador (para ERP Navision)
     category: {
         type: String,
         enum: ['Junior', 'Senior', 'Expert'],
         default: 'Junior'
     },
-    
-    // Estadísticas acumuladas
     stats: {
         totalSessions: { type: Number, default: 0 },
-        totalPlayTime: { type: Number, default: 0 },     // segundos
+        totalPlayTime: { type: Number, default: 0 },
         totalCoins: { type: Number, default: 0 },
         totalDeaths: { type: Number, default: 0 },
         levelsCompleted: { type: Number, default: 0 },
         bestScore: { type: Number, default: 0 },
-        averageSessionTime: { type: Number, default: 0 }, // segundos
+        averageSessionTime: { type: Number, default: 0 },
         averageCoinsPerSession: { type: Number, default: 0 }
     },
-    
-    // Historial de partidas
     lastSession: {
         sessionId: String,
         startTime: Date,
         endTime: Date,
-        duration: Number,     // segundos
+        duration: Number,
         coins: Number,
         deaths: Number,
         completed: Boolean,
         levelReached: Number
     },
-    
-    // Fechas
     firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now }
 }, {
     timestamps: true
 });
 
-// Método para actualizar categoría basado en estadísticas
 playerSchema.methods.updateCategory = function() {
     const stats = this.stats;
     
@@ -68,7 +58,6 @@ playerSchema.methods.updateCategory = function() {
     return this.save();
 };
 
-// Método para calcular estadísticas después de una sesión
 playerSchema.methods.updateStats = async function(session) {
     this.stats.totalSessions += 1;
     this.stats.totalPlayTime += session.duration || 0;
@@ -77,7 +66,6 @@ playerSchema.methods.updateStats = async function(session) {
     if (session.completed) this.stats.levelsCompleted += 1;
     if (session.score > this.stats.bestScore) this.stats.bestScore = session.score;
     
-    // Promedios
     this.stats.averageSessionTime = Math.round(this.stats.totalPlayTime / this.stats.totalSessions);
     this.stats.averageCoinsPerSession = Math.round(this.stats.totalCoins / this.stats.totalSessions);
     
@@ -93,14 +81,11 @@ playerSchema.methods.updateStats = async function(session) {
     };
     
     this.lastSeen = new Date();
-    
-    // Actualizar categoría
     await this.updateCategory();
     
     return this.save();
 };
 
-// Índices para consultas del ERP
 playerSchema.index({ 'stats.totalPlayTime': -1 });
 playerSchema.index({ 'stats.levelsCompleted': -1 });
 playerSchema.index({ category: 1 });

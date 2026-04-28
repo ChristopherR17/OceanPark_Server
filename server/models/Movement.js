@@ -12,28 +12,19 @@ const movementSchema = new mongoose.Schema({
         index: true
     },
     playerName: String,
-    
-    // Acción realizada
     action: {
         type: String,
-        enum: ['JOIN', 'MOVE', 'JUMP', 'KEY_PICKUP', 'DOOR_PASS', 'DEATH', 'COIN_COLLECT', 'LEAVE', 'LEVEL_COMPLETE'],
+        enum: ['JOIN', 'MOVE', 'JUMP', 'KEY_PICKUP', 'KEY_DROP', 'DOOR_PASS', 'DEATH', 'COIN_COLLECT', 'LEAVE', 'LEVEL_COMPLETE'],
         required: true
     },
-    
-    // Posición en el momento de la acción
     position: {
         x: Number,
         y: Number
     },
-    
-    // Datos adicionales según acción
     data: {
-        direction: String,      // LEFT, RIGHT, JUMP
-        coinValue: Number,
-        deathCause: String,
-        keyHolder: String
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     },
-    
     timestamp: {
         type: Date,
         default: Date.now
@@ -42,7 +33,6 @@ const movementSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Índices para consultas
 movementSchema.index({ sessionId: 1, playerId: 1, timestamp: 1 });
 movementSchema.index({ action: 1 });
 movementSchema.index({ timestamp: -1 });

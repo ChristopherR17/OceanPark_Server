@@ -33,10 +33,6 @@ class Room {
     setState(state) { 
         this.state = state; 
     }
-    
-    getPlayersArray() {
-        return Array.from(this.players.values());
-    }
 }
 
 module.exports = Room;

@@ -5,18 +5,14 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oceanp
 
 async function connectDatabase() {
     try {
-        await mongoose.connect(MONGODB_URI, {
-            // Opciones para Mongoose 6+
-        });
+        await mongoose.connect(MONGODB_URI);
         logger.info('✅ MongoDB conectado: ' + MONGODB_URI);
     } catch (error) {
         logger.error('❌ Error conectando a MongoDB: ' + error.message);
-        // No detener el servidor si falla MongoDB
         logger.warn('⚠️ El servidor funcionará sin persistencia de datos');
     }
 }
 
-// Eventos de conexión
 mongoose.connection.on('disconnected', () => {
     logger.warn('⚠️ MongoDB desconectado');
 });

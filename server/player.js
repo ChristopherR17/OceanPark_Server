@@ -27,7 +27,9 @@ class Player {
         
         // Progreso
         this.coins = 0;
+        this.deaths = 0;
         this.passedDoor = false;
+        this.category = "Junior";
     }
 }
 

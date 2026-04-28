@@ -1,3 +1,5 @@
+const express = require('express');
+const cors = require('cors');
 const WebSocket = require("ws");
 const crypto = require("crypto");
 require("dotenv").config();
@@ -9,22 +11,64 @@ const startGameLoop = require("./gameLoop");
 const logger = require("./logger");
 const GameWorld = require("./gameWorld");
 
+// MongoDB
+const { connectDatabase } = require("./config/database");
+const PlayerModel = require("./models/Player");
+const GameSessionModel = require("./models/GameSession");
+const Movement = require("./models/Movement");
+const navisionApi = require("./api/navisionApi");
+
+// Inyectar modelos en GameWorld
+GameWorld.setModels({
+    PlayerModel,
+    GameSession: GameSessionModel,
+    Movement
+});
+
 // Configuración
 const SERVER_PORT = process.env.SERVER_PORT || 3000;
+const API_PORT = process.env.API_PORT || 3001;
 const MAX_PLAYERS = 8;
-const MIN_PLAYERS_TO_START = 1; // Cambiar a 2 para forzar cooperativo
 
-// Inicialización
+// --- Servidor Express (API REST) ---
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use('/api/navision', navisionApi);
+
+app.get('/', (req, res) => {
+    res.json({
+        servicio: 'OceanPark API',
+        version: '1.0.0',
+        endpoints: {
+            jugadores: '/api/navision/jugadores',
+            partidas: '/api/navision/partidas',
+            partidasJugadores: '/api/navision/partidas-jugadores',
+            kpi1: '/api/navision/kpi/1',
+            kpi2: '/api/navision/kpi/2',
+            kpi3: '/api/navision/kpi/3',
+            health: '/api/navision/health'
+        }
+    });
+});
+
+app.listen(API_PORT, '0.0.0.0', () => {
+    logger.info(`📡 API Navision iniciada en puerto ${API_PORT}`);
+});
+
+// --- Servidor WebSocket ---
 const wss = new WebSocket.Server({ port: SERVER_PORT, host: '0.0.0.0' });
 const room = new Room();
 const world = new GameWorld(room);
 
-logger.info(`🚀 Servidor OceanPark iniciado en puerto ${SERVER_PORT}`);
-logger.info(`🌐 Esperando conexiones en wss://pico3.ieti.site`);
+// Conectar MongoDB
+connectDatabase();
 
-/**
- * GESTIÓN DE CONEXIONES
- */
+logger.info(`🚀 Servidor OceanPark iniciado en puerto ${SERVER_PORT}`);
+
+// Sesión actual
+let currentSession = null;
+
 wss.on("connection", (ws) => {
     const playerId = crypto.randomUUID();
     logger.info(`🔌 Socket abierto: ID temporal ${playerId}`);
@@ -35,30 +79,36 @@ wss.on("connection", (ws) => {
             handleMessage(ws, playerId, data);
         } catch (error) {
             logger.error(`❌ Error JSON de ${playerId}: ${error.message}`);
-            ws.send(JSON.stringify({ 
-                type: "ERROR", 
-                message: "Formato JSON inválido" 
-            }));
+            ws.send(JSON.stringify({ type: "ERROR", message: "Formato JSON inválido" }));
         }
     });
 
-    ws.on("close", () => {
+    ws.on("close", async () => {
         const player = room.players.get(playerId);
         if (player) {
             logger.info(`[-] JUGADOR SALE: ${player.name} (${playerId})`);
             
-            // Si tenía la llave, soltarla
+            if (currentSession) {
+                await Movement.create({
+                    sessionId: currentSession.sessionId,
+                    playerId: playerId,
+                    playerName: player.name,
+                    action: 'LEAVE',
+                    position: { x: Math.round(player.x), y: Math.round(player.y) },
+                    timestamp: new Date()
+                });
+            }
+            
             if (world.keyHolder === playerId) {
                 world.dropKey(player);
             }
             
             room.removePlayer(playerId);
-            
-            // Notificar a todos
             broadcastPlayersList();
             
             if (!room.isReady()) {
                 room.setState("waiting");
+                await finalizeSession();
                 logger.info("💤 Sala en espera: No hay jugadores activos.");
             }
         } else {
@@ -71,9 +121,6 @@ wss.on("connection", (ws) => {
     });
 });
 
-/**
- * LÓGICA DE MENSAJES
- */
 function handleMessage(ws, id, data) {
     if (!data || typeof data.type !== "string") return;
 
@@ -81,47 +128,29 @@ function handleMessage(ws, id, data) {
         case "JOIN":
             handleJoin(ws, id, data);
             break;
-
         case "MOVE":
             handleMove(id, data);
             break;
-
         case "LEAVE":
             handleLeave(id);
             break;
-
         case "GET_STATE":
             handleGetState(ws);
             break;
-
         default:
-            logger.info(`❓ Mensaje desconocido de ${id}: ${data.type}`);
-            ws.send(JSON.stringify({ 
-                type: "ERROR", 
-                message: `Tipo desconocido: ${data.type}` 
-            }));
+            logger.info(`❓ Mensaje desconocido: ${data.type}`);
+            ws.send(JSON.stringify({ type: "ERROR", message: `Tipo desconocido: ${data.type}` }));
     }
 }
 
-/**
- * MANEJADOR JOIN
- */
-function handleJoin(ws, id, data) {
+async function handleJoin(ws, id, data) {
     if (room.players.has(id)) {
-        ws.send(JSON.stringify({ 
-            type: "ERROR", 
-            message: "Ya estás conectado" 
-        }));
+        ws.send(JSON.stringify({ type: "ERROR", message: "Ya estás conectado" }));
         return;
     }
 
-    // Verificar límite de jugadores
     if (room.players.size >= MAX_PLAYERS) {
-        ws.send(JSON.stringify({ 
-            type: "ERROR", 
-            message: `Sala llena: máximo ${MAX_PLAYERS} jugadores` 
-        }));
-        logger.warn(`🚫 Sala llena. Rechazado.`);
+        ws.send(JSON.stringify({ type: "ERROR", message: `Sala llena: máximo ${MAX_PLAYERS} jugadores` }));
         return;
     }
 
@@ -134,6 +163,37 @@ function handleJoin(ws, id, data) {
     
     logger.info(`${icon} NUEVO ${isVisor ? 'VISOR' : 'JUGADOR'}: "${name}" (ID: ${id})`);
 
+    // MongoDB: buscar o crear jugador
+    let dbPlayer = await PlayerModel.findOne({ playerId: id });
+    if (!dbPlayer) {
+        dbPlayer = await PlayerModel.create({
+            playerId: id,
+            nickname: name,
+            category: 'Junior',
+            firstSeen: new Date(),
+            lastSeen: new Date()
+        });
+    } else {
+        if (dbPlayer.nickname !== name) {
+            dbPlayer.nickname = name;
+            await dbPlayer.save();
+        }
+    }
+
+    // Crear sesión si es necesario
+    if (!currentSession || currentSession.completed) {
+        currentSession = await GameSessionModel.create({
+            sessionId: crypto.randomUUID(),
+            levelName: 'Ocean World',
+            levelIndex: 0,
+            startTime: new Date(),
+            playerCount: 0,
+            totalCoinsAvailable: world.coins.length
+        });
+        world.setSessionId(currentSession.sessionId);
+        logger.info(`📋 Nueva sesión: ${currentSession.sessionId}`);
+    }
+
     // Posición de spawn
     const spawnIndex = room.players.size % world.spawnPoints.length;
     const spawn = world.spawnPoints[spawnIndex];
@@ -142,18 +202,19 @@ function handleJoin(ws, id, data) {
     player.x = spawn.x;
     player.y = spawn.y;
     player.isVisor = isVisor;
+    player.category = dbPlayer.category;
     
     const added = room.addPlayer(player);
-
     if (!added) {
-        ws.send(JSON.stringify({ 
-            type: "ERROR", 
-            message: "No se pudo añadir a la sala" 
-        }));
+        ws.send(JSON.stringify({ type: "ERROR", message: "No se pudo añadir a la sala" }));
         return;
     }
 
-    // Enviar confirmación al jugador
+    // Actualizar sesión
+    currentSession.playerCount = room.players.size;
+    await currentSession.save();
+
+    // Responder al jugador
     ws.send(JSON.stringify({
         type: "JOINED",
         playerId: id,
@@ -162,70 +223,40 @@ function handleJoin(ws, id, data) {
         worldState: world.getState()
     }));
 
-    // Notificar a todos la nueva lista
     broadcastPlayersList();
 
-    // Verificar si podemos empezar
-    if (room.players.size >= MIN_PLAYERS_TO_START && room.state !== "playing") {
+    if (room.players.size >= 1 && room.state !== "playing") {
         room.setState("playing");
-        logger.info("🎬 ¡Sala en juego! Jugadores: " + room.players.size);
+        room.startTime = Date.now();
     }
 }
 
-/**
- * MANEJADOR MOVE - Ahora con más información
- */
 function handleMove(id, data) {
     const player = room.players.get(id);
     if (!player) return;
 
-    const prevLeft = player.input.left;
-    const prevRight = player.input.right;
-    const prevJump = player.input.jump;
-
-    // Actualizar input (compatible con ambos formatos)
-    if (data.left !== undefined) {
-        player.input.left = !!data.left;
-    } else if (data.dir === "LEFT") {
-        player.input.left = true;
-        player.input.right = false;
-    } else {
-        player.input.left = false;
-    }
-
-    if (data.right !== undefined) {
+    // Aceptar formato de la app: { type: "MOVE", RIGHT: true/false, LEFT: true/false, JUMP: true/false }
+    // Y también formato alternativo: { type: "MOVE", left: true, right: true, jump: true }
+    
+    if (data.RIGHT !== undefined) {
+        player.input.right = !!data.RIGHT;
+    } else if (data.right !== undefined) {
         player.input.right = !!data.right;
-    } else if (data.dir === "RIGHT") {
-        player.input.right = true;
-        player.input.left = false;
-    } else if (data.dir !== undefined && data.dir !== "LEFT") {
-        player.input.right = false;
     }
-
-    // Salto (evento, no estado)
-    if (data.jump === true || data.dir === "JUMP" || data.dir === "UP") {
-        player.input.jump = true;
+    
+    if (data.LEFT !== undefined) {
+        player.input.left = !!data.LEFT;
+    } else if (data.left !== undefined) {
+        player.input.left = !!data.left;
     }
-
-    // LOG inteligente
-    let acciones = [];
-    if (player.input.left) acciones.push("⬅️ Izquierda");
-    if (player.input.right) acciones.push("➡️ Derecha");
-    if (player.input.jump) acciones.push("⬆️ Salto");
-    if (acciones.length === 0) acciones.push("🛑 Parado");
     
-    const changed = prevLeft !== player.input.left || 
-                    prevRight !== player.input.right || 
-                    prevJump !== player.input.jump;
-    
-    if (changed) {
-        logger.info(`🏃 ${player.name}: ${acciones.join(" + ")}`);
+    if (data.JUMP !== undefined) {
+        player.input.jump = !!data.JUMP;
+    } else if (data.jump !== undefined) {
+        player.input.jump = !!data.jump;
     }
 }
 
-/**
- * MANEJADOR LEAVE
- */
 function handleLeave(id) {
     const player = room.players.get(id);
     if (!player) return;
@@ -239,9 +270,6 @@ function handleLeave(id) {
     broadcastPlayersList();
 }
 
-/**
- * MANEJADOR GET_STATE
- */
 function handleGetState(ws) {
     ws.send(JSON.stringify({
         type: "STATE",
@@ -249,8 +277,6 @@ function handleGetState(ws) {
         world: world.getState()
     }));
 }
-
-// ==================== BROADCAST ====================
 
 function broadcast(data) {
     const msg = JSON.stringify(data);
@@ -277,9 +303,6 @@ function broadcastState() {
     });
 }
 
-/**
- * Obtener estado de todos los jugadores
- */
 function getPlayersState() {
     const playersState = [];
     room.players.forEach((player) => {
@@ -292,29 +315,61 @@ function getPlayersState() {
             facingRight: player.facingRight,
             onGround: player.onGround,
             isVisor: player.isVisor,
-            hasKey: world.keyHolder === player.id
+            hasKey: world.keyHolder === player.id,
+            coins: player.coins || 0,
+            deaths: player.deaths || 0,
+            category: player.category
         });
     });
     return playersState;
 }
 
-// Iniciar el ciclo de juego (60 FPS)
+async function finalizeSession() {
+    if (!currentSession || currentSession.completed) return;
+    
+    const playersData = [];
+    for (const player of room.players.values()) {
+        if (player.isVisor) continue;
+        
+        playersData.push({
+            id: player.id,
+            name: player.name,
+            category: player.category,
+            coins: player.coins || 0,
+            deaths: player.deaths || 0,
+            passedDoor: player.passedDoor || false
+        });
+        
+        const dbPlayer = await PlayerModel.findOne({ playerId: player.id });
+        if (dbPlayer) {
+            await dbPlayer.updateStats({
+                sessionId: currentSession.sessionId,
+                startTime: currentSession.startTime,
+                endTime: new Date(),
+                duration: Math.round((Date.now() - currentSession.startTime) / 1000),
+                coinsCollected: player.coins || 0,
+                deaths: player.deaths || 0,
+                completed: player.passedDoor || false,
+                score: (player.coins || 0) * 10,
+                levelReached: 0
+            });
+        }
+    }
+    
+    await currentSession.finalize(playersData);
+    logger.info(`📋 Sesión finalizada: ${currentSession.sessionId}`);
+}
+
+// Game Loop
 startGameLoop(room, world, broadcastState);
 
-// ==================== COMANDOS DE CONSOLA ====================
+// Log periódico
+setInterval(() => {
+    const playerCount = room.players.size;
+    logger.info(`📊 Estado: ${playerCount} jugadores | Sala: ${room.state}`);
+}, 30000);
 
 process.on('SIGINT', () => {
     logger.info('🛑 Servidor detenido');
     process.exit(0);
 });
-
-// Log de estado cada 30 segundos
-setInterval(() => {
-    const playerCount = room.players.size;
-    const keyStatus = world.keyTaken ? 
-        `Llave: ${world.keyHolder ? 'portada' : 'en el suelo'}` : 
-        'Llave: no recogida';
-    const doorStatus = world.doorOpen ? 'Abierta' : 'Cerrada';
-    
-    logger.info(`📊 Estado: ${playerCount} jugadores | ${keyStatus} | Puerta: ${doorStatus} | Sala: ${room.state}`);
-}, 30000);

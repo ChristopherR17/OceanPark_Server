@@ -7,8 +7,6 @@ const gameSessionSchema = new mongoose.Schema({
         unique: true,
         index: true
     },
-    
-    // Jugadores que participaron
     players: [{
         playerId: String,
         nickname: String,
@@ -21,43 +19,32 @@ const gameSessionSchema = new mongoose.Schema({
         deaths: { type: Number, default: 0 },
         completed: { type: Boolean, default: false },
         score: { type: Number, default: 0 },
-        timePlayed: { type: Number, default: 0 }  // segundos individual
+        timePlayed: { type: Number, default: 0 }
     }],
-    
-    // Datos de la partida
     levelName: { type: String, default: 'Ocean World' },
     levelIndex: { type: Number, default: 0 },
     playerCount: { type: Number, default: 1 },
     completed: { type: Boolean, default: false },
-    
-    // Tiempos
     startTime: { type: Date, default: Date.now },
     endTime: { type: Date },
-    duration: { type: Number, default: 0 },        // segundos
-    
-    // Resultados
+    duration: { type: Number, default: 0 },
     totalCoinsCollected: { type: Number, default: 0 },
     totalCoinsAvailable: { type: Number, default: 0 },
     totalDeaths: { type: Number, default: 0 },
     bestPlayerScore: { type: Number, default: 0 },
-    
-    // Métricas para KPIs
-    averagePlayerTime: { type: Number, default: 0 }  // tiempo medio por jugador
+    averagePlayerTime: { type: Number, default: 0 }
 }, {
     timestamps: true
 });
 
-// Índices para consultas
 gameSessionSchema.index({ startTime: -1 });
 gameSessionSchema.index({ completed: 1 });
 gameSessionSchema.index({ 'players.playerId': 1 });
 
-// Método para finalizar sesión
 gameSessionSchema.methods.finalize = async function(playersData) {
     this.endTime = new Date();
     this.duration = Math.round((this.endTime - this.startTime) / 1000);
     
-    // Actualizar datos de jugadores
     this.players = playersData.map(p => ({
         playerId: p.id,
         nickname: p.name,
