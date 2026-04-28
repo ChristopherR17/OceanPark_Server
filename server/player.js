@@ -1,26 +1,34 @@
 class Player {
-  constructor(id, name, ws) {
-    this.id = id;
-    this.name = name;
+    constructor(id, name, ws) {
+        this.id = id;
+        this.name = name;
+        this.ws = ws;
 
-    this.ws = ws; //conexion websocket
+        // Posición
+        this.x = 0;
+        this.y = 0;
 
-    this.x = 100;
-    this.y = 100;
+        // Velocidad
+        this.vx = 0;
+        this.vy = 0;
 
-    this.vx = 0;
-    this.vy = 0;
-  }
+        // Input
+        this.input = { 
+            left: false, 
+            right: false, 
+            jump: false 
+        };
 
-  toJSON() {
-    return {
-      id: this.id,
-      name: this.name,
-      x: this.x,
-      y: this.y,
-      skin: this.skin
-    };
-  }
+        // Estado
+        this.onGround = true;
+        this.state = "IDLE";
+        this.facingRight = true;
+        this.isVisor = false;
+        
+        // Progreso
+        this.coins = 0;
+        this.passedDoor = false;
+    }
 }
 
 module.exports = Player;

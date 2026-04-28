@@ -1,0 +1,219 @@
+{
+  "name": "Ocean Park",
+  "description": "",
+  "levels": [
+    {
+      "name": "Ocean World",
+      "description": "",
+      "gameplayData": "",
+      "layers": [
+        {
+          "name": "COLOR PARED",
+          "gameplayData": "",
+          "x": -75,
+          "y": 0,
+          "depth": 5.0,
+          "tilesSheetFile": "media/tileset_cueva_2.png",
+          "tilesWidth": 23,
+          "tilesHeight": 23,
+          "visible": true,
+          "groupId": "__main__",
+          "tileMapFile": "tilemaps/level_000_layer_000.json"
+        }
+      ],
+      "layerGroups": [
+        {
+          "id": "__main__",
+          "name": "Main",
+          "collapsed": false
+        }
+      ],
+      "sprites": [
+        {
+          "name": "Leaf Idle",
+          "gameplayData": "",
+          "type": "Leaf Idle",
+          "animationId": "anim_1777040775591909",
+          "x": 45,
+          "y": 261,
+          "width": 32,
+          "height": 32,
+          "imageFile": "media/New Piskel(1).png",
+          "flipX": false,
+          "flipY": false,
+          "depth": 0.0,
+          "groupId": "__main__"
+        },
+        {
+          "name": "Mushroom Right",
+          "gameplayData": "",
+          "type": "Mushroom Right",
+          "animationId": "anim_1777039782459347",
+          "x": 162,
+          "y": 384,
+          "width": 32,
+          "height": 32,
+          "imageFile": "media/imatge-removebg-preview(2).png",
+          "flipX": false,
+          "flipY": false,
+          "depth": 0.0,
+          "groupId": "__main__"
+        }
+      ],
+      "spriteGroups": [
+        {
+          "id": "__main__",
+          "name": "Main",
+          "collapsed": false
+        }
+      ],
+      "groupId": "__main__",
+      "viewportWidth": 320,
+      "viewportHeight": 180,
+      "viewportX": 173,
+      "viewportY": 473,
+      "viewportAdaptation": "letterbox",
+      "viewportInitialColor": "orange",
+      "viewportPreviewColor": "blue",
+      "backgroundColorHex": "#568BB1",
+      "depthSensitivity": 0.08,
+      "zonesFile": "zones/level_000_zones.json",
+      "pathsFile": "paths/level_000_paths.json"
+    }
+  ],
+  "levelGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    }
+  ],
+  "mediaAssets": [
+    {
+      "name": "Mushroom Left",
+      "fileName": "media/imatge-removebg-preview(4).png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "Leaf Idle",
+      "fileName": "media/New Piskel(1).png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "Mushroom Green Idle",
+      "fileName": "media/Mushroom Green Idle.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "Mushroom Right",
+      "fileName": "media/imatge-removebg-preview(2).png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "Mushroom Idle",
+      "fileName": "media/imatge-removebg-preview(2)(1).png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "cute_mushroom_idle",
+      "fileName": "media/cute_mushroom_idle.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 48,
+      "tileHeight": 48,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "result_key-rbg",
+      "fileName": "media/result_key-rbg.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 16,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    },
+    {
+      "name": "tileset_cueva_2",
+      "fileName": "media/tileset_cueva_2.png",
+      "mediaType": "tileset",
+      "tileWidth": 23,
+      "tileHeight": 23,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__group_1776868424987923_0"
+    },
+    {
+      "name": "tileset_cueva_2_2",
+      "fileName": "media/tileset_cueva_2_2.png",
+      "mediaType": "tileset",
+      "tileWidth": 23,
+      "tileHeight": 23,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__group_1776868424987923_0"
+    },
+    {
+      "name": "tileset_cueva",
+      "fileName": "media/tileset_cueva.png",
+      "mediaType": "tileset",
+      "tileWidth": 23,
+      "tileHeight": 23,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__group_1776868424987923_0"
+    },
+    {
+      "name": "Mushroom Green Right",
+      "fileName": "media/Mushroom Green Right.png",
+      "mediaType": "spritesheet",
+      "tileWidth": 32,
+      "tileHeight": 32,
+      "selectionColorHex": "#FFCC00",
+      "groupId": "__main__"
+    }
+  ],
+  "mediaGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    },
+    {
+      "id": "__group_1776868424987923_0",
+      "name": "Map",
+      "collapsed": false
+    }
+  ],
+  "zoneTypes": [
+    {
+      "name": "Player Zone",
+      "color": "green"
+    },
+    {
+      "name": "Player Death",
+      "color": "red"
+    },
+    {
+      "name": "Floor",
+      "color": "yellow"
+    }
+  ],
+  "animationsFile": "animations/animations.json"
+}
