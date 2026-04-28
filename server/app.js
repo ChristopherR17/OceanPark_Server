@@ -62,12 +62,16 @@ const room = new Room();
 const world = new GameWorld(room);
 
 // Conectar MongoDB
-connectDatabase();
+connectDatabase().then((ok) => {
+    persistenceEnabled = ok;
+});
 
 logger.info(`🚀 Servidor OceanPark iniciado en puerto ${SERVER_PORT}`);
 
 // Sesión actual
 let currentSession = null;
+let persistenceEnabled = true;
+
 
 wss.on("connection", (ws) => {
     const playerId = crypto.randomUUID();
@@ -88,15 +92,20 @@ wss.on("connection", (ws) => {
         if (player) {
             logger.info(`[-] JUGADOR SALE: ${player.name} (${playerId})`);
             
-            if (currentSession) {
-                await Movement.create({
-                    sessionId: currentSession.sessionId,
-                    playerId: playerId,
-                    playerName: player.name,
-                    action: 'LEAVE',
-                    position: { x: Math.round(player.x), y: Math.round(player.y) },
-                    timestamp: new Date()
-                });
+            if (currentSession && persistenceEnabled) {
+                try {
+                    await Movement.create({
+                        sessionId: currentSession.sessionId,
+                        playerId: playerId,
+                        playerName: player.name,
+                        action: 'LEAVE',
+                        position: { x: Math.round(player.x), y: Math.round(player.y) },
+                        timestamp: new Date()
+                    });
+                } catch (error) {
+                    persistenceEnabled = false;
+                    logger.warn("⚠️ No se pudo registrar LEAVE: " + error.message);
+                }
             }
             
             if (world.keyHolder === playerId) {
@@ -143,6 +152,78 @@ function handleMessage(ws, id, data) {
     }
 }
 
+
+function getPersistentPlayerId(name, socketId) {
+    const clean = String(name || "anonymous")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, "_")
+        .slice(0, 32);
+    return clean || socketId;
+}
+
+async function safeFindOrCreateDbPlayer(socketId, name) {
+    if (!persistenceEnabled) return { category: "Junior" };
+
+    try {
+        const persistentId = getPersistentPlayerId(name, socketId);
+        let dbPlayer = await PlayerModel.findOne({ playerId: persistentId });
+        if (!dbPlayer) {
+            dbPlayer = await PlayerModel.create({
+                playerId: persistentId,
+                nickname: name,
+                category: "Junior",
+                firstSeen: new Date(),
+                lastSeen: new Date()
+            });
+        } else {
+            dbPlayer.nickname = name;
+            dbPlayer.lastSeen = new Date();
+            await dbPlayer.save();
+        }
+        return dbPlayer;
+    } catch (error) {
+        persistenceEnabled = false;
+        logger.warn("⚠️ MongoDB no disponible en JOIN: " + error.message);
+        return { category: "Junior" };
+    }
+}
+
+async function safeCreateSession() {
+    if (!persistenceEnabled) {
+        return {
+            sessionId: crypto.randomUUID(),
+            completed: false,
+            startTime: new Date(),
+            playerCount: 0,
+            save: async () => {},
+            finalize: async () => {}
+        };
+    }
+
+    try {
+        return await GameSessionModel.create({
+            sessionId: crypto.randomUUID(),
+            levelName: "Ocean World",
+            levelIndex: 0,
+            startTime: new Date(),
+            playerCount: 0,
+            totalCoinsAvailable: world.coins.length
+        });
+    } catch (error) {
+        persistenceEnabled = false;
+        logger.warn("⚠️ MongoDB no disponible al crear sesión: " + error.message);
+        return {
+            sessionId: crypto.randomUUID(),
+            completed: false,
+            startTime: new Date(),
+            playerCount: 0,
+            save: async () => {},
+            finalize: async () => {}
+        };
+    }
+}
+
 async function handleJoin(ws, id, data) {
     if (room.players.has(id)) {
         ws.send(JSON.stringify({ type: "ERROR", message: "Ya estás conectado" }));
@@ -163,33 +244,12 @@ async function handleJoin(ws, id, data) {
     
     logger.info(`${icon} NUEVO ${isVisor ? 'VISOR' : 'JUGADOR'}: "${name}" (ID: ${id})`);
 
-    // MongoDB: buscar o crear jugador
-    let dbPlayer = await PlayerModel.findOne({ playerId: id });
-    if (!dbPlayer) {
-        dbPlayer = await PlayerModel.create({
-            playerId: id,
-            nickname: name,
-            category: 'Junior',
-            firstSeen: new Date(),
-            lastSeen: new Date()
-        });
-    } else {
-        if (dbPlayer.nickname !== name) {
-            dbPlayer.nickname = name;
-            await dbPlayer.save();
-        }
-    }
+    // MongoDB: buscar o crear jugador. Si Mongo falla, el juego sigue funcionando.
+    const dbPlayer = await safeFindOrCreateDbPlayer(id, name);
 
-    // Crear sesión si es necesario
+    // Crear sesión si es necesario. Si Mongo falla, se usa una sesión en memoria.
     if (!currentSession || currentSession.completed) {
-        currentSession = await GameSessionModel.create({
-            sessionId: crypto.randomUUID(),
-            levelName: 'Ocean World',
-            levelIndex: 0,
-            startTime: new Date(),
-            playerCount: 0,
-            totalCoinsAvailable: world.coins.length
-        });
+        currentSession = await safeCreateSession();
         world.setSessionId(currentSession.sessionId);
         logger.info(`📋 Nueva sesión: ${currentSession.sessionId}`);
     }
@@ -223,6 +283,13 @@ async function handleJoin(ws, id, data) {
         worldState: world.getState()
     }));
 
+    // Enviar un STATE completo inmediatamente para que la APP pinte sin esperar al siguiente tick.
+    ws.send(JSON.stringify({
+        type: "STATE",
+        players: getPlayersState(),
+        world: world.getState()
+    }));
+
     broadcastPlayersList();
 
     if (room.players.size >= 1 && room.state !== "playing") {
@@ -233,28 +300,26 @@ async function handleJoin(ws, id, data) {
 
 function handleMove(id, data) {
     const player = room.players.get(id);
-    if (!player) return;
+    if (!player) {
+        logger.warn(`MOVE ignorado: jugador no encontrado ${id}`);
+        return;
+    }
 
-    // Aceptar formato de la app: { type: "MOVE", RIGHT: true/false, LEFT: true/false, JUMP: true/false }
-    // Y también formato alternativo: { type: "MOVE", left: true, right: true, jump: true }
-    
-    if (data.RIGHT !== undefined) {
-        player.input.right = !!data.RIGHT;
-    } else if (data.right !== undefined) {
-        player.input.right = !!data.right;
+    if (data.RIGHT !== undefined || data.right !== undefined) {
+        player.input.right = data.RIGHT === true || data.right === true;
     }
-    
-    if (data.LEFT !== undefined) {
-        player.input.left = !!data.LEFT;
-    } else if (data.left !== undefined) {
-        player.input.left = !!data.left;
+
+    if (data.LEFT !== undefined || data.left !== undefined) {
+        player.input.left = data.LEFT === true || data.left === true;
     }
-    
-    if (data.JUMP !== undefined) {
-        player.input.jump = !!data.JUMP;
-    } else if (data.jump !== undefined) {
-        player.input.jump = !!data.jump;
+
+    if (data.JUMP === true || data.jump === true) {
+        player.input.jump = true;
     }
+
+    logger.info(
+        `MOVE ${player.name}: left=${player.input.left} right=${player.input.right} jump=${player.input.jump}`
+    );
 }
 
 function handleLeave(id) {
@@ -324,13 +389,14 @@ function getPlayersState() {
     return playersState;
 }
 
-async function finalizeSession() {
+
+async function finalizeSessionFromSnapshot(playersSnapshot) {
     if (!currentSession || currentSession.completed) return;
-    
+
     const playersData = [];
-    for (const player of room.players.values()) {
+    for (const player of playersSnapshot) {
         if (player.isVisor) continue;
-        
+
         playersData.push({
             id: player.id,
             name: player.name,
@@ -339,25 +405,48 @@ async function finalizeSession() {
             deaths: player.deaths || 0,
             passedDoor: player.passedDoor || false
         });
-        
-        const dbPlayer = await PlayerModel.findOne({ playerId: player.id });
-        if (dbPlayer) {
-            await dbPlayer.updateStats({
-                sessionId: currentSession.sessionId,
-                startTime: currentSession.startTime,
-                endTime: new Date(),
-                duration: Math.round((Date.now() - currentSession.startTime) / 1000),
-                coinsCollected: player.coins || 0,
-                deaths: player.deaths || 0,
-                completed: player.passedDoor || false,
-                score: (player.coins || 0) * 10,
-                levelReached: 0
-            });
+
+        if (persistenceEnabled) {
+            try {
+                const persistentId = getPersistentPlayerId(player.name, player.id);
+                const dbPlayer = await PlayerModel.findOne({ playerId: persistentId });
+                if (dbPlayer) {
+                    await dbPlayer.updateStats({
+                        sessionId: currentSession.sessionId,
+                        startTime: currentSession.startTime,
+                        endTime: new Date(),
+                        duration: Math.round((Date.now() - currentSession.startTime) / 1000),
+                        coinsCollected: player.coins || 0,
+                        deaths: player.deaths || 0,
+                        completed: player.passedDoor || false,
+                        score: (player.coins || 0) * 10,
+                        levelReached: 0
+                    });
+                }
+            } catch (error) {
+                persistenceEnabled = false;
+                logger.warn("⚠️ No se pudo actualizar stats: " + error.message);
+            }
         }
     }
-    
-    await currentSession.finalize(playersData);
+
+    if (persistenceEnabled && typeof currentSession.finalize === "function") {
+        try {
+            await currentSession.finalize(playersData);
+        } catch (error) {
+            persistenceEnabled = false;
+            logger.warn("⚠️ No se pudo finalizar sesión en Mongo: " + error.message);
+        }
+    }
+
+    currentSession.completed = true;
+    world.reset();
     logger.info(`📋 Sesión finalizada: ${currentSession.sessionId}`);
+}
+
+async function finalizeSession() {
+    const playersSnapshot = Array.from(room.players.values());
+    await finalizeSessionFromSnapshot(playersSnapshot);
 }
 
 // Game Loop

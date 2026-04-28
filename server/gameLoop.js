@@ -35,12 +35,17 @@ function updatePhysics(room, world) {
         if (player.input.left) {
             player.vx = -SPEED;
             player.facingRight = false;
+            player.state = "RUN";
         } else if (player.input.right) {
             player.vx = SPEED;
             player.facingRight = true;
+            player.state = "RUN";
         } else {
             player.vx *= 0.8;
-            if (Math.abs(player.vx) < 0.1) player.vx = 0;
+            if (Math.abs(player.vx) < 0.1) {
+                player.vx = 0;
+                player.state = "IDLE";
+            }
         }
 
         player.x += player.vx;
@@ -50,6 +55,7 @@ function updatePhysics(room, world) {
             player.vy = JUMP_FORCE;
             player.onGround = false;
             player.input.jump = false;
+            player.state = "JUMP";
         }
 
         // Gravedad

@@ -11,10 +11,10 @@
     "url": "git+https://github.com/ChristopherR17/OceanPark_Server.git"
   },
   "type": "commonjs",
-  "main": "server/app.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node server/app.js",
-    "dev": "node server/app.js"
+    "start": "node app.js",
+    "dev": "node app.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -23,6 +23,7 @@
     "keypress": "0.2.1",
     "mongodb": "7.2.0",
     "winston": "^3.10.0",
-    "ws": "8.20.0"
+    "ws": "8.20.0",
+    "mongoose": "^8.9.5"
   }
 }
