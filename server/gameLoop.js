@@ -2,7 +2,10 @@ const logger = require("./logger");
 
 function startGameLoop(room, world, broadcastState) {
     const TICK_RATE = 60;
+    const NETWORK_RATE = 15;
+
     const DT = 1000 / TICK_RATE;
+    const NET_DT = 1000 / NETWORK_RATE;
 
     const SPEED = 5;
     const GRAVITY = 0.8;
@@ -23,8 +26,12 @@ function startGameLoop(room, world, broadcastState) {
         }
 
         updateAnimations(room);
-        broadcastState();
     }, DT);
+
+    setInterval(() => {
+        if (room.state !== "playing" || room.players.size === 0) return;
+        broadcastState();
+    }, NET_DT);
 }
 
 function updatePhysics(room, world) {

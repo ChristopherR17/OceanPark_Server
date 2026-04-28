@@ -300,8 +300,9 @@ async function handleJoin(ws, id, data) {
 
 function handleMove(id, data) {
     const player = room.players.get(id);
+
     if (!player) {
-        logger.warn(`MOVE ignorado: jugador no encontrado ${id}`);
+        logger.warn(`MOVE ignorado: no existe jugador con id ${id}`);
         return;
     }
 
@@ -317,9 +318,7 @@ function handleMove(id, data) {
         player.input.jump = true;
     }
 
-    logger.info(
-        `MOVE ${player.name}: left=${player.input.left} right=${player.input.right} jump=${player.input.jump}`
-    );
+    logger.info(`MOVE ${player.name}: ${JSON.stringify(data)} | input=${JSON.stringify(player.input)}`);
 }
 
 function handleLeave(id) {
@@ -364,7 +363,6 @@ function broadcastState() {
     broadcast({
         type: "STATE",
         players: getPlayersState(),
-        world: world.getState()
     });
 }
 
