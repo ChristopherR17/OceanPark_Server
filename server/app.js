@@ -4,8 +4,18 @@ const Player = require("./player");
 const PlayerRegistry = require("./playerRegistry");
 const Game = require("./game");
 
-const PORT = process.env.PORT || 3000;
-const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
+require("dotenv").config({
+  path: `.env.${process.env.NODE_ENV || "production"}`
+});
+
+const PORT = Number(process.env.SERVER_PORT || 3000);
+
+const wss = new WebSocket.Server({
+  port: PORT,
+  host: "0.0.0.0"
+});
+
+console.log(`🚀 Servidor Ocean Park en ws://0.0.0.0:${PORT}`);
 
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
@@ -118,7 +128,7 @@ function broadcastState() {
             x: Math.round(gs.x),
             y: Math.round(gs.y),
             state: visualState,
-            facingRight: !gs.isMovingLeft,
+            facingRight: gs.facingRight,
             hasKey: game.gameEngine.leafKey.pickedBy === p.id,
             hasFinishedLevel: gs.hasFinishedLevel
         };
@@ -139,5 +149,3 @@ function broadcastState() {
         }
     });
 }
-
-console.log(`🚀 Servidor Ocean Park en puerto ${PORT}`);
