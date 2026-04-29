@@ -9,10 +9,23 @@ class GameEngine {
         this.speed = 5;
         this.platforms = [];
         this.deathZones = [];
-        
+
         this.leafKey = {
-            x: 0, y: 0, initialX: 0, initialY: 0,
-            pickedBy: null, width: 32, height: 32
+            x: 45,
+            y: 261,
+            initialX: 45,
+            initialY: 261,
+            pickedBy: null,
+            width: 32,
+            height: 32
+        };
+
+        this.door = {
+            x: 450,
+            y: 548,
+            width: 36,
+            height: 64,
+            open: false
         };
 
         this.loadGameData();
@@ -21,24 +34,72 @@ class GameEngine {
     loadGameData() {
         try {
             const assetsPath = path.join(__dirname, "games-tool-assets");
-            const mainJson = JSON.parse(fs.readFileSync(path.join(assetsPath, "game_data.json"), "utf8"));
+            const mainPath = path.join(assetsPath, "game_data.json");
+
+            if (!fs.existsSync(mainPath)) {
+                console.log("⚠️ No existe games-tool-assets/game_data.json. Usando datos por defecto.");
+                this.platforms.push(new Hitbox(70, 580, 310, 12));
+                this.platforms.push(new Hitbox(405, 580, 100, 13));
+                this.deathZones.push(new Hitbox(-250, 605, 1700, 150));
+                return;
+            }
+
+            const mainJson = JSON.parse(fs.readFileSync(mainPath, "utf8"));
             const level = mainJson.levels[0];
 
-            // Cargar posición de llave
-            const keySprite = level.sprites.find(s => s.name.includes("leaf_key") || s.type.includes("leaf_key"));
+            const keySprite = level.sprites.find(s => {
+                const name = String(s.name || "").toLowerCase();
+                const type = String(s.type || "").toLowerCase();
+                return name.includes("key")
+                    || type.includes("key")
+                    || name.includes("leaf")
+                    || type.includes("leaf");
+            });
+
             if (keySprite) {
                 this.leafKey.x = this.leafKey.initialX = keySprite.x;
                 this.leafKey.y = this.leafKey.initialY = keySprite.y;
             }
 
-            // Cargar suelos
+            const doorSprite = level.sprites.find(s => {
+                const name = String(s.name || "").toLowerCase();
+                const type = String(s.type || "").toLowerCase();
+                return name.includes("door") || type.includes("door") || name.includes("porta") || type.includes("porta");
+            });
+
+            if (doorSprite) {
+                this.door.x = doorSprite.x;
+                this.door.y = doorSprite.y;
+                this.door.width = doorSprite.width || this.door.width;
+                this.door.height = doorSprite.height || this.door.height;
+            }
+
             const zonesData = JSON.parse(fs.readFileSync(path.join(assetsPath, level.zonesFile), "utf-8"));
             zonesData.zones.forEach(z => {
                 const box = new Hitbox(z.x, z.y, z.width, z.height);
-                if (z.type === "Floor") this.platforms.push(box);
-                else if (z.type === "Player Death") this.deathZones.push(box);
+                const type = String(z.type || "").toLowerCase();
+                const name = String(z.name || "").toLowerCase();
+
+                if (type.includes("floor") || type.includes("platform") || name.includes("suelo")) {
+                    this.platforms.push(box);
+                } else if (type.includes("death") || name.includes("death")) {
+                    this.deathZones.push(box);
+                } else if (type.includes("door") || name.includes("puerta") || name.includes("porta")) {
+                    this.door.x = z.x;
+                    this.door.y = z.y;
+                    this.door.width = z.width;
+                    this.door.height = z.height;
+                }
             });
-        } catch (e) { console.log("Error cargando mapa:", e.message); }
+
+            console.log(`✅ Mapa cargado: ${this.platforms.length} suelos, ${this.deathZones.length} zonas muerte`);
+            console.log(`🚪 Puerta: x=${this.door.x}, y=${this.door.y}, w=${this.door.width}, h=${this.door.height}`);
+        } catch (e) {
+            console.log("⚠️ Error cargando mapa:", e.message);
+            this.platforms.push(new Hitbox(70, 580, 310, 12));
+            this.platforms.push(new Hitbox(405, 580, 100, 13));
+            this.deathZones.push(new Hitbox(-250, 605, 1700, 150));
+        }
     }
 
     update() {
@@ -46,8 +107,7 @@ class GameEngine {
 
         players.forEach(player => {
             const state = player.getGameState();
-            
-            // 1. MOVIMIENTO HORIZONTAL (Mantenemos el bloqueo lateral)
+
             let nextX = state.x;
             if (state.isMovingLeft) nextX -= this.speed;
             if (state.isMovingRight) nextX += this.speed;
@@ -57,57 +117,42 @@ class GameEngine {
                 state.x = nextX;
             }
 
-            // 2. GRAVEDAD Y MOVIMIENTO VERTICAL
             state.verticalSpeed += this.gravity;
             let nextY = state.y + state.verticalSpeed;
             const testHitboxY = new Hitbox(state.x, nextY, state.width, state.height);
 
-            // --- LÓGICA DE COLISIÓN ---
-            
-            // A. ¿Choca con el suelo?
             let platformCol = this.platforms.find(p => testHitboxY.intersects(p));
 
-            // B. ¿Choca con otro jugador? (Solo si cae y no es él mismo)
-            let otherPlayerCol = players.find(other => 
+            let otherPlayerCol = players.find(other =>
                 other.id !== player.id && testHitboxY.intersects(other.playerGameState.hitbox)
             );
 
-            // Si choca con plataforma O con la cabeza de otro jugador
             if (state.verticalSpeed > 0) {
                 if (platformCol) {
                     state.y = platformCol.y - state.height;
                     state.verticalSpeed = 0;
                     state.canJump = true;
-                } 
-                else if (otherPlayerCol && state.y + state.height <= otherPlayerCol.playerGameState.y + 10) {
-                    // Solo aterrizamos si estamos "encima" (el +10 es un margen de error)
+                } else if (otherPlayerCol && state.y + state.height <= otherPlayerCol.playerGameState.y + 10) {
                     state.y = otherPlayerCol.playerGameState.y - state.height;
                     state.verticalSpeed = 0;
                     state.canJump = true;
-                    
-                    // OPCIONAL: Si el de abajo se mueve, el de arriba se mueve con él
+
                     if (otherPlayerCol.playerGameState.isMovingLeft) state.x -= this.speed;
                     if (otherPlayerCol.playerGameState.isMovingRight) state.x += this.speed;
                 } else {
                     state.y = nextY;
+                    state.canJump = false;
                 }
             } else {
                 state.y = nextY;
+                state.canJump = false;
             }
 
-            // 3. ACTUALIZAR HITBOX
             state.hitbox.updateHitboxPosition(state.x, state.y);
 
-            // 4. LÓGICA DE LA LLAVE (Pegar a la cabeza)
-            if (this.leafKey.pickedBy === player.id) {
-                this.leafKey.x = state.x;
-                this.leafKey.y = state.y - 35;
-            } else if (!this.leafKey.pickedBy) {
-                const keyHitbox = new Hitbox(this.leafKey.x, this.leafKey.y, 32, 32);
-                if (state.hitbox.intersects(keyHitbox)) this.leafKey.pickedBy = player.id;
-            }
+            this.updateKey(player, state);
+            this.updateDoor(player, state);
 
-            // 5. MUERTE
             if (this.deathZones.find(dz => state.hitbox.intersects(dz)) || state.y > 1500) {
                 if (this.leafKey.pickedBy === player.id) {
                     this.leafKey.pickedBy = null;
@@ -117,16 +162,66 @@ class GameEngine {
                 player.resetPosition();
             }
         });
+
+        this.updateWinCondition();
+    }
+
+    updateKey(player, state) {
+        if (this.leafKey.pickedBy === player.id) {
+            this.leafKey.x = state.x;
+            this.leafKey.y = state.y - 35;
+            return;
+        }
+
+        if (!this.leafKey.pickedBy) {
+            const keyHitbox = new Hitbox(this.leafKey.x, this.leafKey.y, this.leafKey.width, this.leafKey.height);
+            if (state.hitbox.intersects(keyHitbox)) {
+                this.leafKey.pickedBy = player.id;
+                state.hasKey = true;
+            }
+        }
+    }
+
+    updateDoor(player, state) {
+        const doorHitbox = new Hitbox(this.door.x, this.door.y, this.door.width, this.door.height);
+
+        if (this.leafKey.pickedBy === player.id && state.hitbox.intersects(doorHitbox)) {
+            this.door.open = true;
+            this.leafKey.pickedBy = null;
+            this.leafKey.x = this.door.x;
+            this.leafKey.y = this.door.y;
+            state.hasKey = false;
+        }
+
+        if (this.door.open && state.hitbox.intersects(doorHitbox)) {
+            state.crossedDoor = true;
+        }
+    }
+
+    updateWinCondition() {
+        const players = this.playerRegistry.getPlayersSnapshot();
+        if (players.length === 0) {
+            return;
+        }
+
+        const allPassed = players.every(p => p.playerGameState.crossedDoor === true);
+        if (allPassed) {
+            this.door.allPlayersPassed = true;
+        }
     }
 
     canMoveTo(playerId, hitbox) {
-        // Evitamos que los jugadores se solapen lateralmente
+        if (!this.door.open) {
+            const doorHitbox = new Hitbox(this.door.x, this.door.y, this.door.width, this.door.height);
+            if (hitbox.intersects(doorHitbox)) {
+                return false;
+            }
+        }
+
         for (const other of this.playerRegistry.getPlayersSnapshot()) {
             if (other.id !== playerId) {
-                // Solo bloqueamos X si NO estamos uno encima del otro
                 const otherState = other.playerGameState;
                 if (hitbox.intersects(otherState.hitbox)) {
-                    // Si el jugador está intentando entrar en el cuerpo del otro lateralmente, bloqueamos
                     if (Math.abs(hitbox.y - otherState.y) < 20) return false;
                 }
             }
@@ -135,7 +230,37 @@ class GameEngine {
     }
 
     getKeyState() {
-        return { x: Math.round(this.leafKey.x), y: Math.round(this.leafKey.y), pickedBy: this.leafKey.pickedBy };
+        return {
+            x: Math.round(this.leafKey.x),
+            y: Math.round(this.leafKey.y),
+            pickedBy: this.leafKey.pickedBy
+        };
+    }
+
+    getDoorState() {
+        const players = this.playerRegistry.getPlayersSnapshot();
+        const passedPlayers = players.filter(p => p.playerGameState.crossedDoor === true).length;
+        const allPlayersPassed = players.length > 0 && passedPlayers === players.length;
+
+        return {
+            x: this.door.x,
+            y: this.door.y,
+            width: this.door.width,
+            height: this.door.height,
+            open: this.door.open,
+            passedPlayers,
+            totalPlayers: players.length,
+            allPlayersPassed
+        };
+    }
+
+    getPlatformsState() {
+        return this.platforms.map(p => ({
+            x: p.x,
+            y: p.y,
+            width: p.width,
+            height: p.height
+        }));
     }
 }
 
