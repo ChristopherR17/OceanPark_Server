@@ -12,43 +12,28 @@ const wss = new WebSocket.Server({ port: PORT, host: '0.0.0.0' });
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
-// EXTRAER EL SPAWN DESDE game_data.json
-// Valores por defecto basados en tu JSON actual
-let SPAWN_X = 124; 
-let SPAWN_Y = 384; 
+// SPAWN POR DEFECTO
+let SPAWN_X = 107; 
+let SPAWN_Y = 385; 
 
-try {
-    const gameDataPath = path.join(__dirname, "games-tool-assets", "game_data.json");
-    if (fs.existsSync(gameDataPath)) {
-        const gameData = JSON.parse(fs.readFileSync(gameDataPath, "utf-8"));
-        
-        // Buscamos tu sprite de mushroom en el JSON
-        const sprites = gameData.levels[0].sprites;
-        const spawnSprite = sprites.find(s => s.name === "mushroom idle" || s.type.includes("mushroom"));
-        
-        if (spawnSprite) {
-            SPAWN_X = spawnSprite.x;
-            SPAWN_Y = spawnSprite.y;
-            console.log(`✅ Punto de Spawn detectado -> X:${SPAWN_X}, Y:${SPAWN_Y}`);
-        }
-    }
-} catch (e) { console.error("⚠️ Error game_data.json:", e.message); }
-
-console.log(`🚀 Servidor Ocean Park iniciado en puerto ${PORT}`);
-
-wss.on("connection", (ws) => {
-    ws.on("message", (raw) => {
+wss.on('connection', (ws) => {
+    ws.on('message', (message) => {
         try {
-            const data = JSON.parse(raw);
+            const data = JSON.parse(message);
             handleMessage(ws, data);
-        } catch (e) {} 
+        } catch (e) { console.error("Error:", e); }
     });
 
-    ws.on("close", () => {
+    ws.on('close', () => {
         const player = playerRegistry.getPlayer(ws);
         if (player) {
+            // Si el jugador tenía la llave, la suelta
+            if (game.gameEngine.leafKey.pickedBy === player.id) {
+                game.gameEngine.leafKey.pickedBy = null;
+                game.gameEngine.leafKey.x = game.gameEngine.leafKey.initialX;
+                game.gameEngine.leafKey.y = game.gameEngine.leafKey.initialY;
+            }
             playerRegistry.removePlayer(ws);
-            broadcastState();
         }
     });
 });
@@ -56,18 +41,21 @@ wss.on("connection", (ws) => {
 function handleMessage(ws, data) {
     if (data.type === "JOIN") {
         if (playerRegistry.nameIsAlreadyTaken(data.name)) return;
-        
         const newId = Math.random().toString(36).substr(2, 9);
         const newPlayer = new Player(newId, data.name, SPAWN_X, SPAWN_Y);
-        
         playerRegistry.addPlayer(ws, newPlayer);
         ws.send(JSON.stringify({ type: "JOINED", playerId: newPlayer.id, name: newPlayer.name }));
-        
     } else if (data.type === "MOVE") {
         playerRegistry.setMovement(ws, data.dir);
         if (data.jump) playerRegistry.setJump(ws);
     }
 }
+
+// Bucle de física y red
+setInterval(() => {
+    game.update();
+    broadcastState();
+}, 1000 / 60);
 
 function broadcastState() {
     const stateMsg = JSON.stringify({
@@ -79,16 +67,13 @@ function broadcastState() {
             y: Math.round(p.playerGameState.y),
             state: (p.playerGameState.isMovingLeft || p.playerGameState.isMovingRight) ? "RUN" : "IDLE",
             facingRight: !p.playerGameState.isMovingLeft
-        }))
+        })),
+        leafKey: game.gameEngine.getKeyState() // <--- CORREGIDO: Usamos game.gameEngine
     });
     
-    playerRegistry.getAllSockets().forEach(s => {
-        if (s.readyState === WebSocket.OPEN) s.send(stateMsg);
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(stateMsg);
     });
 }
 
-// Bucle de juego a 60 FPS
-setInterval(() => {
-    game.update();
-    broadcastState();
-}, 1000 / 60);
+console.log("🚀 Servidor Ocean Park iniciado en puerto 3000");
