@@ -8,34 +8,44 @@ class GameEngine {
         this.gravity = 0.8;
         this.speed = 5;
         this.platforms = [];
-        this.deathZones = []; // <-- NUEVO: Array para las zonas de muerte
         this.hitboxesAnim = { IDLE: {w: 32, h: 32}, RIGHT: {w: 32, h: 32}, LEFT: {w: 32, h: 32} };
         
         this.loadGameData();
     }
 
     loadGameData() {
+        // 1. Cargar Hitboxes
         try {
+            const animPath = path.join(__dirname, "games-tool-assets", "animations", "animations.json");
+            if (fs.existsSync(animPath)) {
+                console.log("✅ animations.json detectado");
+            }
+        } catch (e) { }
+
+        // 2. Cargar Zonas (Suelos)
+        try {
+            // Buscamos en la ruta exacta de tu JSON
             let zonesPath = path.join(__dirname, "games-tool-assets", "zones", "level_000_zones.json");
             
+            // Fallback por si lo tienes en la carpeta raíz de assets
             if (!fs.existsSync(zonesPath)) {
                 zonesPath = path.join(__dirname, "games-tool-assets", "level_000_zones.json");
             }
-            const zoneData = JSON.parse(fs.readFileSync(zonesPath, "utf-8"));
-            zoneData.zones.forEach(z => {
-                        // Usamos las coordenadas puras del JSON (z.x y z.y)
-                        if (z.type === "Floor") {
-                            this.platforms.push(new Hitbox(z.x, z.y, z.width, z.height));
-                        } 
-                        else if (z.type === "Player Death") {
-                            this.deathZones.push(new Hitbox(z.x, z.y, z.width, z.height));
-                        }
-                    });
-                    console.log("✅ Servidor cargado con coordenadas originales.");
-                } catch (e) { 
-                    console.error("⚠️ Error game_data.json:", e.message);
-                }
+
+            if (fs.existsSync(zonesPath)) {
+                const zoneData = JSON.parse(fs.readFileSync(zonesPath, "utf-8"));
+                zoneData.zones.forEach(z => {
+                    if (z.type === "Floor") {
+                        this.platforms.push(new Hitbox(z.x, z.y, z.width, z.height));
+                    }
+                });
+                console.log(`✅ Zonas de colisión cargadas: ${this.platforms.length} plataformas.`);
+            } else {
+                console.log("⚠️ No se encontró el JSON de zonas. Usando suelo por defecto.");
+                this.platforms = [new Hitbox(13, 402, 275, 12), new Hitbox(335, 401, 168, 14)];
             }
+        } catch (e) { console.error("⚠️ Error leyendo zones:", e.message); }
+    }
 
     update() {
         this.playerRegistry.getPlayersSnapshot().forEach(player => {
@@ -66,8 +76,9 @@ class GameEngine {
             const testHitboxY = new Hitbox(state.x, nextY, state.width, state.height);
             let collision = this.getPlatformCollision(testHitboxY);
 
+            // Si choca cayendo (velocidad positiva en Y-down)
             if (collision && state.verticalSpeed > 0) { 
-                state.y = collision.y - state.height;
+                state.y = collision.y - state.height; // Se apoya justo encima
                 state.verticalSpeed = 0;
                 state.canJump = true;
             } else {
@@ -75,14 +86,7 @@ class GameEngine {
                 if (state.verticalSpeed !== 0) state.canJump = false;
             }
 
-            // Actualizamos la hitbox a su posición final en este frame
             state.hitbox.updateHitboxPosition(state.x, state.y);
-
-            // NUEVO: Comprobamos si el jugador ha tocado una zona de muerte
-            if (this.getDeathCollision(state.hitbox)) {
-                player.resetPosition(); // ¡Teletransporte al inicio!
-                state.hitbox.updateHitboxPosition(state.x, state.y); // Actualizamos la hitbox para que no muera en bucle
-            }
         });
     }
 
@@ -97,11 +101,6 @@ class GameEngine {
 
     getPlatformCollision(hitbox) {
         return this.platforms.find(p => hitbox.intersects(p));
-    }
-
-    // NUEVO: Función para comprobar choques con la muerte
-    getDeathCollision(hitbox) {
-        return this.deathZones.find(dz => hitbox.intersects(dz));
     }
 }
 module.exports = GameEngine;

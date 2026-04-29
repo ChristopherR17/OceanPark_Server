@@ -13,9 +13,9 @@ const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
 // EXTRAER EL SPAWN DESDE game_data.json
-// En app.js
-let SPAWN_X = 107; // El X que me diste
-let SPAWN_Y = 385; // El Y que me diste
+// Valores por defecto basados en tu JSON actual
+let SPAWN_X = 124; 
+let SPAWN_Y = 384; 
 
 try {
     const gameDataPath = path.join(__dirname, "games-tool-assets", "game_data.json");
