@@ -5,14 +5,44 @@ const path = require("path");
 class GameEngine {
     constructor(playerRegistry) {
         this.playerRegistry = playerRegistry;
+
         this.gravity = 0.8;
         this.speed = 5;
+
+        this.level = 1;
+        this.levelChanging = false;
+
         this.platforms = [];
         this.deathZones = [];
-        
+
         this.leafKey = {
-            x: 0, y: 0, initialX: 0, initialY: 0,
-            pickedBy: null, width: 32, height: 32
+            x: 0,
+            y: 0,
+            initialX: 0,
+            initialY: 0,
+            pickedBy: null,
+            width: 32,
+            height: 32
+        };
+
+        this.door = {
+            x: 260,
+            y: 379,
+            width: 54,
+            height: 38,
+            open: false
+        };
+
+        this.exitZone = {
+            x: this.door.x + 45,
+            y: this.door.y - 40,
+            width: 80,
+            height: 100
+        };
+
+        this.level2Spawn = {
+            x: 107,
+            y: 385
         };
 
         this.loadGameData();
@@ -24,21 +54,48 @@ class GameEngine {
             const mainJson = JSON.parse(fs.readFileSync(path.join(assetsPath, "game_data.json"), "utf8"));
             const level = mainJson.levels[0];
 
-            // Cargar posición de llave
-            const keySprite = level.sprites.find(s => s.name.includes("leaf_key") || s.type.includes("leaf_key"));
+            const keySprite = level.sprites.find(s =>
+                s.name?.includes("leaf_key") || s.type?.includes("leaf_key")
+            );
+
             if (keySprite) {
                 this.leafKey.x = this.leafKey.initialX = keySprite.x;
                 this.leafKey.y = this.leafKey.initialY = keySprite.y;
             }
 
-            // Cargar suelos
+            const doorSprite = level.sprites.find(s =>
+                s.name?.toLowerCase().includes("door") ||
+                s.type?.toLowerCase().includes("door") ||
+                s.name?.toLowerCase().includes("porta") ||
+                s.type?.toLowerCase().includes("porta")
+            );
+
+            if (doorSprite) {
+                this.door.x = doorSprite.x;
+                this.door.y = doorSprite.y;
+                this.exitZone.x = this.door.x + 35;
+                this.exitZone.y = this.door.y - 20;
+            }
+
             const zonesData = JSON.parse(fs.readFileSync(path.join(assetsPath, level.zonesFile), "utf-8"));
+
             zonesData.zones.forEach(z => {
                 const box = new Hitbox(z.x, z.y, z.width, z.height);
-                if (z.type === "Floor") this.platforms.push(box);
-                else if (z.type === "Player Death") this.deathZones.push(box);
+
+                if (z.type === "Floor") {
+                    this.platforms.push(box);
+                } else if (z.type === "Player Death") {
+                    this.deathZones.push(box);
+                }
             });
-        } catch (e) { console.log("Error cargando mapa:", e.message); }
+
+            console.log("✅ Mapa cargado");
+            console.log("🔑 Llave:", this.leafKey);
+            console.log("🚪 Puerta:", this.door);
+
+        } catch (e) {
+            console.log("❌ Error cargando mapa:", e.message);
+        }
     }
 
     update() {
@@ -46,96 +103,258 @@ class GameEngine {
 
         players.forEach(player => {
             const state = player.getGameState();
-            
-            // 1. MOVIMIENTO HORIZONTAL (Mantenemos el bloqueo lateral)
+
+            if (state.hasFinishedLevel) {
+                return;
+            }
+
+            // 1. Movimiento horizontal
             let nextX = state.x;
+
             if (state.isMovingLeft) nextX -= this.speed;
             if (state.isMovingRight) nextX += this.speed;
 
             const testHitboxX = new Hitbox(nextX, state.y, state.width, state.height);
+
             if (this.canMoveTo(player.id, testHitboxX)) {
                 state.x = nextX;
             }
 
-            // 2. GRAVEDAD Y MOVIMIENTO VERTICAL
+            // 2. Gravedad y movimiento vertical
             state.verticalSpeed += this.gravity;
+
             let nextY = state.y + state.verticalSpeed;
             const testHitboxY = new Hitbox(state.x, nextY, state.width, state.height);
 
-            // --- LÓGICA DE COLISIÓN ---
-            
-            // A. ¿Choca con el suelo?
             let platformCol = this.platforms.find(p => testHitboxY.intersects(p));
 
-            // B. ¿Choca con otro jugador? (Solo si cae y no es él mismo)
-            let otherPlayerCol = players.find(other => 
-                other.id !== player.id && testHitboxY.intersects(other.playerGameState.hitbox)
+            let otherPlayerCol = players.find(other =>
+                other.id !== player.id &&
+                !other.playerGameState.hasFinishedLevel &&
+                testHitboxY.intersects(other.playerGameState.hitbox)
             );
 
-            // Si choca con plataforma O con la cabeza de otro jugador
             if (state.verticalSpeed > 0) {
                 if (platformCol) {
                     state.y = platformCol.y - state.height;
                     state.verticalSpeed = 0;
                     state.canJump = true;
-                } 
-                else if (otherPlayerCol && state.y + state.height <= otherPlayerCol.playerGameState.y + 10) {
-                    // Solo aterrizamos si estamos "encima" (el +10 es un margen de error)
+                } else if (
+                    otherPlayerCol &&
+                    state.y + state.height <= otherPlayerCol.playerGameState.y + 10
+                ) {
                     state.y = otherPlayerCol.playerGameState.y - state.height;
                     state.verticalSpeed = 0;
                     state.canJump = true;
-                    
-                    // OPCIONAL: Si el de abajo se mueve, el de arriba se mueve con él
+
                     if (otherPlayerCol.playerGameState.isMovingLeft) state.x -= this.speed;
                     if (otherPlayerCol.playerGameState.isMovingRight) state.x += this.speed;
                 } else {
                     state.y = nextY;
+                    state.canJump = false;
                 }
             } else {
                 state.y = nextY;
+                state.canJump = false;
             }
 
-            // 3. ACTUALIZAR HITBOX
+            // 3. Actualizar hitbox
             state.hitbox.updateHitboxPosition(state.x, state.y);
 
-            // 4. LÓGICA DE LA LLAVE (Pegar a la cabeza)
+            // 4. Llave
+            this.updateKey(player, state);
+
+            // 5. Puerta
+            this.updateDoor(player, state);
+
+            // 6. Detectar si ha cruzado la puerta
+            this.updatePlayerFinishedLevel(player, state);
+
+            // 7. Muerte / caída
+            this.updateDeath(player, state);
+        });
+
+        this.checkLevelChange(players);
+    }
+
+    updateKey(player, state) {
+        if (this.leafKey.pickedBy === player.id) {
+            this.leafKey.x = state.x;
+            this.leafKey.y = state.y - 35;
+            return;
+        }
+
+        if (!this.leafKey.pickedBy) {
+            const keyHitbox = new Hitbox(
+                this.leafKey.x,
+                this.leafKey.y,
+                this.leafKey.width,
+                this.leafKey.height
+            );
+
+            if (state.hitbox.intersects(keyHitbox)) {
+                this.leafKey.pickedBy = player.id;
+                console.log(`🔑 ${player.name} ha cogido la llave`);
+            }
+        }
+    }
+
+    updateDoor(player, state) {
+        if (this.door.open) return;
+        if (this.leafKey.pickedBy !== player.id) return;
+
+        const doorHitbox = new Hitbox(
+            this.door.x,
+            this.door.y,
+            this.door.width,
+            this.door.height
+        );
+
+        if (state.hitbox.intersects(doorHitbox)) {
+            this.door.open = true;
+            console.log(`🚪 ${player.name} ha abierto la puerta`);
+        }
+    }
+
+    updatePlayerFinishedLevel(player, state) {
+        if (!this.door.open) return;
+
+        const exitHitbox = new Hitbox(
+            this.exitZone.x,
+            this.exitZone.y,
+            this.exitZone.width,
+            this.exitZone.height
+        );
+
+        if (state.hitbox.intersects(exitHitbox)) {
+            state.hasFinishedLevel = true;
+            state.isMovingLeft = false;
+            state.isMovingRight = false;
+            state.verticalSpeed = 0;
+
+            console.log(`✅ ${player.name} ha cruzado la puerta`);
+        }
+    }
+
+    updateDeath(player, state) {
+        const diedByZone = this.deathZones.find(dz => state.hitbox.intersects(dz));
+        const diedByFall = state.y > 1500;
+
+        if (diedByZone || diedByFall) {
             if (this.leafKey.pickedBy === player.id) {
-                this.leafKey.x = state.x;
-                this.leafKey.y = state.y - 35;
-            } else if (!this.leafKey.pickedBy) {
-                const keyHitbox = new Hitbox(this.leafKey.x, this.leafKey.y, 32, 32);
-                if (state.hitbox.intersects(keyHitbox)) this.leafKey.pickedBy = player.id;
+                this.resetKey();
             }
 
-            // 5. MUERTE
-            if (this.deathZones.find(dz => state.hitbox.intersects(dz)) || state.y > 1500) {
-                if (this.leafKey.pickedBy === player.id) {
-                    this.leafKey.pickedBy = null;
-                    this.leafKey.x = this.leafKey.initialX;
-                    this.leafKey.y = this.leafKey.initialY;
-                }
-                player.resetPosition();
-            }
+            player.resetPosition();
+        }
+    }
+
+    checkLevelChange(players) {
+        if (this.levelChanging) return;
+        if (!this.door.open) return;
+        if (players.length === 0) return;
+
+        const everyoneFinished = players.every(p => p.playerGameState.hasFinishedLevel);
+
+        if (everyoneFinished) {
+            this.levelChanging = true;
+
+            console.log("🎉 Todos los jugadores han cruzado. Cambiando al nivel 2...");
+
+            setTimeout(() => {
+                this.goToLevel2(players);
+                this.levelChanging = false;
+            }, 1000);
+        }
+    }
+
+    goToLevel2(players) {
+        this.level = 2;
+
+        players.forEach((player, index) => {
+            const spawnX = this.level2Spawn.x + index * 40;
+            const spawnY = this.level2Spawn.y;
+
+            player.resetForNextLevel(spawnX, spawnY);
         });
+
+        this.resetKey();
+
+        this.door.open = false;
+
+        // Puedes cambiar estas coordenadas cuando tengas el mapa real del nivel 2
+        this.door.x = 1000;
+        this.door.y = 385;
+
+        this.exitZone.x = this.door.x + 35;
+        this.exitZone.y = this.door.y - 20;
+
+        console.log("🗺️ Nivel actual:", this.level);
+    }
+
+    resetKey() {
+        this.leafKey.pickedBy = null;
+        this.leafKey.x = this.leafKey.initialX;
+        this.leafKey.y = this.leafKey.initialY;
     }
 
     canMoveTo(playerId, hitbox) {
-        // Evitamos que los jugadores se solapen lateralmente
+        if (!this.door.open) {
+            const doorHitbox = new Hitbox(
+                this.door.x,
+                this.door.y,
+                this.door.width,
+                this.door.height
+            );
+
+            if (hitbox.intersects(doorHitbox)) {
+                return false;
+            }
+        }
+
         for (const other of this.playerRegistry.getPlayersSnapshot()) {
             if (other.id !== playerId) {
-                // Solo bloqueamos X si NO estamos uno encima del otro
                 const otherState = other.playerGameState;
+
+                if (otherState.hasFinishedLevel) continue;
+
                 if (hitbox.intersects(otherState.hitbox)) {
-                    // Si el jugador está intentando entrar en el cuerpo del otro lateralmente, bloqueamos
-                    if (Math.abs(hitbox.y - otherState.y) < 20) return false;
+                    if (Math.abs(hitbox.y - otherState.y) < 20) {
+                        return false;
+                    }
                 }
             }
         }
+
         return true;
     }
 
     getKeyState() {
-        return { x: Math.round(this.leafKey.x), y: Math.round(this.leafKey.y), pickedBy: this.leafKey.pickedBy };
+        return {
+            x: Math.round(this.leafKey.x),
+            y: Math.round(this.leafKey.y),
+            pickedBy: this.leafKey.pickedBy,
+            picked: this.leafKey.pickedBy !== null
+        };
+    }
+
+    getDoorState() {
+        return {
+            x: Math.round(this.door.x),
+            y: Math.round(this.door.y),
+            width: this.door.width,
+            height: this.door.height,
+            open: this.door.open
+        };
+    }
+
+    getExitZoneState() {
+        return {
+            x: Math.round(this.exitZone.x),
+            y: Math.round(this.exitZone.y),
+            width: this.exitZone.width,
+            height: this.exitZone.height
+        };
     }
 }
 
