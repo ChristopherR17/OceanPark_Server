@@ -11,10 +11,10 @@ const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
 let SPAWN_X = 107;
-let SPAWN_Y = 385;
+let SPAWN_Y = 385 + 673;
 
 wss.on("connection", (ws) => {
-    console.log("🔌 Cliente conectado");
+    console.log("Cliente conectado");
 
     ws.on("message", (message) => {
         try {
@@ -26,7 +26,7 @@ wss.on("connection", (ws) => {
                 handleMove(ws, data);
             }
         } catch (e) {
-            console.error("❌ Error en mensaje:", e.message);
+            console.error("Error en mensaje:", e.message);
         }
     });
 
@@ -42,7 +42,7 @@ wss.on("connection", (ws) => {
             }
 
             playerRegistry.removePlayer(ws);
-            console.log(`👋 Jugador desconectado: ${player.name}`);
+            console.log(`Jugador desconectado: ${player.name}`);
         }
     });
 });
@@ -53,7 +53,7 @@ function handleJoin(ws, data) {
     if (!name) {
         ws.send(JSON.stringify({
             type: "ERROR",
-            message: "Nombre vacío"
+            message: "Nombre vacÃ­o"
         }));
         return;
     }
@@ -82,7 +82,7 @@ function handleJoin(ws, data) {
         name: newPlayer.name
     }));
 
-    console.log(`✅ Nuevo jugador: ${newPlayer.name} (${newPlayer.id})`);
+    console.log(`Nuevo jugador: ${newPlayer.name} (${newPlayer.id})`);
 }
 
 function handleMove(ws, data) {
@@ -140,4 +140,4 @@ function broadcastState() {
     });
 }
 
-console.log(`🚀 Servidor Ocean Park en puerto ${PORT}`);
+console.log(`Servidor Ocean Park en puerto ${PORT}`);
