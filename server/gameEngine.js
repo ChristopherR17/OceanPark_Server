@@ -1,6 +1,4 @@
 const Hitbox = require("./hitbox");
-const fs = require("fs");
-const path = require("path");
 
 class GameEngine {
     constructor(playerRegistry) {
@@ -45,57 +43,25 @@ class GameEngine {
             y: 385
         };
 
-        this.loadGameData();
-    }
+        // Llave
+        this.leafKey.x = this.leafKey.initialX = 45;
+        this.leafKey.y = this.leafKey.initialY = 260;
 
-    loadGameData() {
-        try {
-            const assetsPath = path.join(__dirname, "games-tool-assets");
-            const mainJson = JSON.parse(fs.readFileSync(path.join(assetsPath, "game_data.json"), "utf8"));
-            const level = mainJson.levels[0];
+        // Plataformas generadas del tilemap (tile 23px, layer offset x:-75)
+        const floors = [
+            { x: -75, y: 230 }, { x: -75, y: 253 }, { x: -75, y: 276 },
+            { x: -75, y: 299 }, { x: -75, y: 322 }, { x: -75, y: 345 },
+            { x: -75, y: 368 }, { x: -75, y: 391 }, { x: -75, y: 414 },
+            { x: -75, y: 437 }, { x: -75, y: 460 }, { x: -75, y: 483 },
+            { x: -75, y: 506 }, { x: -75, y: 529 }, { x: -75, y: 552 },
+            { x: -75, y: 575 }, { x: -75, y: 598 }, { x: -75, y: 621 },
+            { x: -75, y: 644 }, { x: -75, y: 667 }, { x: -75, y: 690 },
+            { x: -75, y: 713 }, { x: -75, y: 736 }, { x: -75, y: 759 },
+            { x: -75, y: 782 }
+        ];
+        floors.forEach(f => this.platforms.push(new Hitbox(f.x, f.y, 874, 23)));
 
-            const keySprite = level.sprites.find(s =>
-                s.name?.includes("leaf_key") || s.type?.includes("leaf_key")
-            );
-
-            if (keySprite) {
-                this.leafKey.x = this.leafKey.initialX = keySprite.x;
-                this.leafKey.y = this.leafKey.initialY = keySprite.y;
-            }
-
-            const doorSprite = level.sprites.find(s =>
-                s.name?.toLowerCase().includes("door") ||
-                s.type?.toLowerCase().includes("door") ||
-                s.name?.toLowerCase().includes("porta") ||
-                s.type?.toLowerCase().includes("porta")
-            );
-
-            if (doorSprite) {
-                this.door.x = doorSprite.x;
-                this.door.y = doorSprite.y;
-                this.exitZone.x = this.door.x + 35;
-                this.exitZone.y = this.door.y - 20;
-            }
-
-            const zonesData = JSON.parse(fs.readFileSync(path.join(assetsPath, level.zonesFile), "utf-8"));
-
-            zonesData.zones.forEach(z => {
-                const box = new Hitbox(z.x, z.y, z.width, z.height);
-
-                if (z.type === "Floor") {
-                    this.platforms.push(box);
-                } else if (z.type === "Player Death") {
-                    this.deathZones.push(box);
-                }
-            });
-
-            console.log("✅ Mapa cargado");
-            console.log("🔑 Llave:", this.leafKey);
-            console.log("🚪 Puerta:", this.door);
-
-        } catch (e) {
-            console.log("❌ Error cargando mapa:", e.message);
-        }
+        this.deathZones.push(new Hitbox(-500, 900, 3000, 100));
     }
 
     update() {
@@ -194,7 +160,7 @@ class GameEngine {
 
             if (state.hitbox.intersects(keyHitbox)) {
                 this.leafKey.pickedBy = player.id;
-                console.log(`🔑 ${player.name} ha cogido la llave`);
+                console.log(`${player.name} ha cogido la llave`);
             }
         }
     }
