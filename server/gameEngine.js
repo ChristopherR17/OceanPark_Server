@@ -67,34 +67,24 @@ class GameEngine {
         const LAYER_X = -75;
         const LAYER_Y = 673;
 
-        // IDs que representan superficies físicas en este tileset.
-        // No usamos todos los IDs >= 0 porque muchos son fondo/pared/decoración.
-        const SOLID_SURFACE_IDS = new Set([
-            17, 18, 21,      // piedra superior / borde de suelo
-            47,              // suelo inferior sólido
-            76, 77, 78,      // plataformas/rampas de piedra
-            257, 258         // bloques sólidos del lado derecho / escalones
-        ]);
-
         const tileMap = layer.tileMap;
 
+        // Todos los tiles visibles (id >= 0) son sólidos
         for (let row = 0; row < tileMap.length; row++) {
             let startCol = -1;
 
             for (let col = 0; col <= tileMap[row].length; col++) {
                 const id = col < tileMap[row].length ? tileMap[row][col] : -1;
-                const isSolidSurface = SOLID_SURFACE_IDS.has(id);
+                const isSolid = id >= 0;
 
-                if (isSolidSurface && startCol === -1) {
+                if (isSolid && startCol === -1) {
                     startCol = col;
                 }
 
-                if ((!isSolidSurface || col === tileMap[row].length) && startCol !== -1) {
-                    const endCol = col - 1;
+                if (!isSolid && startCol !== -1) {
                     const x = LAYER_X + startCol * TILE_SIZE;
                     const y = LAYER_Y + row * TILE_SIZE;
-                    const width = (endCol - startCol + 1) * TILE_SIZE;
-
+                    const width = (col - startCol) * TILE_SIZE;
                     this.platforms.push(new Hitbox(x, y, width, TILE_SIZE));
                     startCol = -1;
                 }
