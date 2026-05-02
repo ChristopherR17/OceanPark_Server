@@ -25,7 +25,7 @@ class GameEngine {
 
         this.door = {
             x: 260,
-            y: 379,
+            y: 379 + 673,
             width: 54,
             height: 38,
             open: false
@@ -40,29 +40,96 @@ class GameEngine {
 
         this.level2Spawn = {
             x: 107,
-            y: 385
+            y: 385 + 673
         };
 
         // Llave
         this.leafKey.x = this.leafKey.initialX = 45;
-        this.leafKey.y = this.leafKey.initialY = 260;
+        this.leafKey.y = this.leafKey.initialY = 260 + 673;
 
-        // Plataformas: mismas coordenadas que el editor/game_data.json.
-        // No se suma ningún offset visual del cliente; el servidor solo simula física.
-        const floors = [
-            { x: -75, y: 230 }, { x: -75, y: 253 }, { x: -75, y: 276 },
-            { x: -75, y: 299 }, { x: -75, y: 322 }, { x: -75, y: 345 },
-            { x: -75, y: 368 }, { x: -75, y: 391 }, { x: -75, y: 414 },
-            { x: -75, y: 437 }, { x: -75, y: 460 }, { x: -75, y: 483 },
-            { x: -75, y: 506 }, { x: -75, y: 529 }, { x: -75, y: 552 },
-            { x: -75, y: 575 }, { x: -75, y: 598 }, { x: -75, y: 621 },
-            { x: -75, y: 644 }, { x: -75, y: 667 }, { x: -75, y: 690 },
-            { x: -75, y: 713 }, { x: -75, y: 736 }, { x: -75, y: 759 },
-            { x: -75, y: 782 }
+        // Plataformas: se generan desde el tilemap real para que las colisiones
+        // coincidan con lo que Android dibuja.
+        // IMPORTANTE: solo se usan tiles de superficie/suelo, no toda la pared de fondo.
+        this.loadPlatformsFromTileMap();
+
+        this.deathZones.push(new Hitbox(-500, 900 + 673, 3000, 100));
+    }
+
+    loadPlatformsFromTileMap() {
+        const layer = this.loadLevelLayer();
+
+        if (!layer || !layer.tileMap) {
+            this.loadFallbackPlatforms();
+            return;
+        }
+
+        const TILE_SIZE = 23;
+        const LAYER_X = -75;
+        const LAYER_Y = 0;
+
+        // IDs que representan superficies físicas en este tileset.
+        // No usamos todos los IDs >= 0 porque muchos son fondo/pared/decoración.
+        const SOLID_SURFACE_IDS = new Set([
+            17, 18, 21,      // piedra superior / borde de suelo
+            47,              // suelo inferior sólido
+            76, 77, 78,      // plataformas/rampas de piedra
+            257, 258         // bloques sólidos del lado derecho / escalones
+        ]);
+
+        const tileMap = layer.tileMap;
+
+        for (let row = 0; row < tileMap.length; row++) {
+            let startCol = -1;
+
+            for (let col = 0; col <= tileMap[row].length; col++) {
+                const id = col < tileMap[row].length ? tileMap[row][col] : -1;
+                const isSolidSurface = SOLID_SURFACE_IDS.has(id);
+
+                if (isSolidSurface && startCol === -1) {
+                    startCol = col;
+                }
+
+                if ((!isSolidSurface || col === tileMap[row].length) && startCol !== -1) {
+                    const endCol = col - 1;
+                    const x = LAYER_X + startCol * TILE_SIZE;
+                    const y = LAYER_Y + row * TILE_SIZE;
+                    const width = (endCol - startCol + 1) * TILE_SIZE;
+
+                    this.platforms.push(new Hitbox(x, y, width, TILE_SIZE));
+                    startCol = -1;
+                }
+            }
+        }
+    }
+
+    loadLevelLayer() {
+        const candidates = [
+            "./level_000_layer_000.json",
+            "./tilemaps/level_000_layer_000.json"
         ];
-        floors.forEach(f => this.platforms.push(new Hitbox(f.x, f.y, 874, 23)));
 
-        this.deathZones.push(new Hitbox(-500, 900, 3000, 100));
+        for (const file of candidates) {
+            try {
+                return require(file);
+            } catch (e) {
+                // Probar la siguiente ruta.
+            }
+        }
+
+        console.error("No se pudo cargar level_000_layer_000.json para colisiones; usando plataformas fallback.");
+        return null;
+    }
+
+    loadFallbackPlatforms() {
+        // Fallback mínimo para que el jugador aparezca dentro del nivel aunque el JSON
+        // del tilemap no esté disponible en el servidor.
+        this.platforms.push(new Hitbox(40, 414, 138, 23));
+        this.platforms.push(new Hitbox(40, 437, 161, 23));
+        this.platforms.push(new Hitbox(201, 460, 46, 23));
+        this.platforms.push(new Hitbox(201, 483, 115, 23));
+        this.platforms.push(new Hitbox(224, 506, 115, 23));
+        this.platforms.push(new Hitbox(23, 598, 414, 23));
+        this.platforms.push(new Hitbox(523, 598, 253, 23));
     }
 
     update() {
