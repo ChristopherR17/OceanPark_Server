@@ -65,7 +65,7 @@ class GameEngine {
 
         const TILE_SIZE = 23;
         const LAYER_X = -75;
-        const LAYER_Y = 0;
+        const LAYER_Y = 673;
 
         // IDs que representan superficies físicas en este tileset.
         // No usamos todos los IDs >= 0 porque muchos son fondo/pared/decoración.
@@ -121,15 +121,13 @@ class GameEngine {
     }
 
     loadFallbackPlatforms() {
-        // Fallback mínimo para que el jugador aparezca dentro del nivel aunque el JSON
-        // del tilemap no esté disponible en el servidor.
-        this.platforms.push(new Hitbox(40, 414, 138, 23));
-        this.platforms.push(new Hitbox(40, 437, 161, 23));
-        this.platforms.push(new Hitbox(201, 460, 46, 23));
-        this.platforms.push(new Hitbox(201, 483, 115, 23));
-        this.platforms.push(new Hitbox(224, 506, 115, 23));
-        this.platforms.push(new Hitbox(23, 598, 414, 23));
-        this.platforms.push(new Hitbox(523, 598, 253, 23));
+        this.platforms.push(new Hitbox(40, 414 + 673, 138, 23));
+        this.platforms.push(new Hitbox(40, 437 + 673, 161, 23));
+        this.platforms.push(new Hitbox(201, 460 + 673, 46, 23));
+        this.platforms.push(new Hitbox(201, 483 + 673, 115, 23));
+        this.platforms.push(new Hitbox(224, 506 + 673, 115, 23));
+        this.platforms.push(new Hitbox(23, 598 + 673, 414, 23));
+        this.platforms.push(new Hitbox(523, 598 + 673, 253, 23));
     }
 
     update() {
@@ -272,7 +270,7 @@ class GameEngine {
 
     updateDeath(player, state) {
         const diedByZone = this.deathZones.find(dz => state.hitbox.intersects(dz));
-        const diedByFall = state.y > 1500;
+        const diedByFall = state.y > 1500 + 673;
 
         if (diedByZone || diedByFall) {
             if (this.leafKey.pickedBy === player.id) {
