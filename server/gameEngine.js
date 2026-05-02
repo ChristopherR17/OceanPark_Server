@@ -47,7 +47,8 @@ class GameEngine {
         this.leafKey.x = this.leafKey.initialX = 45;
         this.leafKey.y = this.leafKey.initialY = 260;
 
-        // Plataformas generadas del tilemap (tile 23px, layer offset x:-75)
+        // Plataformas: mismas coordenadas que el editor/game_data.json.
+        // No se suma ningún offset visual del cliente; el servidor solo simula física.
         const floors = [
             { x: -75, y: 230 }, { x: -75, y: 253 }, { x: -75, y: 276 },
             { x: -75, y: 299 }, { x: -75, y: 322 }, { x: -75, y: 345 },

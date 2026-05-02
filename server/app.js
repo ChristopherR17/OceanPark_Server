@@ -11,7 +11,7 @@ const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
 let SPAWN_X = 107;
-let SPAWN_Y = 385 + 673;
+let SPAWN_Y = 385;
 
 wss.on("connection", (ws) => {
     console.log("Cliente conectado");
