@@ -22,6 +22,8 @@ wss.on("connection", (ws) => {
 
             if (data.type === "JOIN") {
                 handleJoin(ws, data);
+            }else if (data.type === "SPECTATE") {
+                ws.isSpectator = true;
             } else if (data.type === "MOVE") {
                 handleMove(ws, data);
             }
@@ -86,6 +88,8 @@ function handleJoin(ws, data) {
 }
 
 function handleMove(ws, data) {
+    if (ws.isSpectator) return;
+
     playerRegistry.setMovement(ws, data.dir);
 
     if (data.jump) {
