@@ -4,27 +4,17 @@ const Player = require("./player");
 const PlayerRegistry = require("./playerRegistry");
 const Game = require("./game");
 
-require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || "production"}`
-});
-
-const PORT = Number(process.env.SERVER_PORT || 3000);
-
-const wss = new WebSocket.Server({
-  port: PORT,
-  host: "0.0.0.0"
-});
-
-console.log(`🚀 Servidor Ocean Park en ws://0.0.0.0:${PORT}`);
+const PORT = process.env.PORT || 3000;
+const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
 
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
 let SPAWN_X = 107;
-let SPAWN_Y = 320;
+let SPAWN_Y = 385 + 673;
 
 wss.on("connection", (ws) => {
-    console.log("🔌 Cliente conectado");
+    console.log("Cliente conectado");
 
     ws.on("message", (message) => {
         try {
@@ -36,7 +26,7 @@ wss.on("connection", (ws) => {
                 handleMove(ws, data);
             }
         } catch (e) {
-            console.error("❌ Error en mensaje:", e.message);
+            console.error("Error en mensaje:", e.message);
         }
     });
 
@@ -52,7 +42,7 @@ wss.on("connection", (ws) => {
             }
 
             playerRegistry.removePlayer(ws);
-            console.log(`👋 Jugador desconectado: ${player.name}`);
+            console.log(`Jugador desconectado: ${player.name}`);
         }
     });
 });
@@ -63,7 +53,7 @@ function handleJoin(ws, data) {
     if (!name) {
         ws.send(JSON.stringify({
             type: "ERROR",
-            message: "Nombre vacío"
+            message: "Nombre vacÃ­o"
         }));
         return;
     }
@@ -92,7 +82,7 @@ function handleJoin(ws, data) {
         name: newPlayer.name
     }));
 
-    console.log(`✅ Nuevo jugador: ${newPlayer.name} (${newPlayer.id})`);
+    console.log(`Nuevo jugador: ${newPlayer.name} (${newPlayer.id})`);
 }
 
 function handleMove(ws, data) {
@@ -128,7 +118,7 @@ function broadcastState() {
             x: Math.round(gs.x),
             y: Math.round(gs.y),
             state: visualState,
-            facingRight: gs.facingRight,
+            facingRight: !gs.isMovingLeft,
             hasKey: game.gameEngine.leafKey.pickedBy === p.id,
             hasFinishedLevel: gs.hasFinishedLevel
         };
@@ -149,3 +139,5 @@ function broadcastState() {
         }
     });
 }
+
+console.log(`Servidor Ocean Park en puerto ${PORT}`);

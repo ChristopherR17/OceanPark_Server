@@ -1,6 +1,4 @@
 const Hitbox = require("./hitbox");
-const fs = require("fs");
-const path = require("path");
 
 class GameEngine {
     constructor(playerRegistry) {
@@ -27,7 +25,7 @@ class GameEngine {
 
         this.door = {
             x: 260,
-            y: 379,
+            y: 379 + 673,
             width: 54,
             height: 38,
             open: false
@@ -42,60 +40,84 @@ class GameEngine {
 
         this.level2Spawn = {
             x: 107,
-            y: 385
+            y: 385 + 673
         };
 
-        this.loadGameData();
+        // Llave
+        this.leafKey.x = this.leafKey.initialX = 45;
+        this.leafKey.y = this.leafKey.initialY = 260 + 673;
+
+        // Plataformas: se generan desde el tilemap real para que las colisiones
+        // coincidan con lo que Android dibuja.
+        // IMPORTANTE: solo se usan tiles de superficie/suelo, no toda la pared de fondo.
+        this.loadPlatformsFromTileMap();
+
+        this.deathZones.push(new Hitbox(-500, 900 + 673, 3000, 100));
     }
 
-    loadGameData() {
-        try {
-            const assetsPath = path.join(__dirname, "games-tool-assets");
-            const mainJson = JSON.parse(fs.readFileSync(path.join(assetsPath, "game_data.json"), "utf8"));
-            const level = mainJson.levels[0];
+    loadPlatformsFromTileMap() {
+        const layer = this.loadLevelLayer();
 
-            const keySprite = level.sprites.find(s =>
-                s.name?.includes("leaf_key") || s.type?.includes("leaf_key")
-            );
-
-            if (keySprite) {
-                this.leafKey.x = this.leafKey.initialX = keySprite.x;
-                this.leafKey.y = this.leafKey.initialY = keySprite.y;
-            }
-
-            const doorSprite = level.sprites.find(s =>
-                s.name?.toLowerCase().includes("door") ||
-                s.type?.toLowerCase().includes("door") ||
-                s.name?.toLowerCase().includes("porta") ||
-                s.type?.toLowerCase().includes("porta")
-            );
-
-            if (doorSprite) {
-                this.door.x = doorSprite.x;
-                this.door.y = doorSprite.y;
-                this.exitZone.x = this.door.x + 35;
-                this.exitZone.y = this.door.y - 20;
-            }
-
-            const zonesData = JSON.parse(fs.readFileSync(path.join(assetsPath, level.zonesFile), "utf-8"));
-
-            zonesData.zones.forEach(z => {
-                const box = new Hitbox(z.x, z.y, z.width, z.height);
-
-                if (z.type === "Floor") {
-                    this.platforms.push(box);
-                } else if (z.type === "Player Death") {
-                    this.deathZones.push(box);
-                }
-            });
-
-            console.log("✅ Mapa cargado");
-            console.log("🔑 Llave:", this.leafKey);
-            console.log("🚪 Puerta:", this.door);
-
-        } catch (e) {
-            console.log("❌ Error cargando mapa:", e.message);
+        if (!layer || !layer.tileMap) {
+            this.loadFallbackPlatforms();
+            return;
         }
+
+        const TILE_SIZE = 23;
+        const LAYER_X = -75;
+        const LAYER_Y = 673;
+
+        const tileMap = layer.tileMap;
+
+        // Todos los tiles visibles (id >= 0) son sólidos
+        for (let row = 0; row < tileMap.length; row++) {
+            let startCol = -1;
+
+            for (let col = 0; col <= tileMap[row].length; col++) {
+                const id = col < tileMap[row].length ? tileMap[row][col] : -1;
+                const isSolid = id >= 0;
+
+                if (isSolid && startCol === -1) {
+                    startCol = col;
+                }
+
+                if (!isSolid && startCol !== -1) {
+                    const x = LAYER_X + startCol * TILE_SIZE;
+                    const y = LAYER_Y + row * TILE_SIZE;
+                    const width = (col - startCol) * TILE_SIZE;
+                    this.platforms.push(new Hitbox(x, y, width, TILE_SIZE));
+                    startCol = -1;
+                }
+            }
+        }
+    }
+
+    loadLevelLayer() {
+        const candidates = [
+            "./level_000_layer_000.json",
+            "./tilemaps/level_000_layer_000.json"
+        ];
+
+        for (const file of candidates) {
+            try {
+                return require(file);
+            } catch (e) {
+                // Probar la siguiente ruta.
+            }
+        }
+
+        console.error("No se pudo cargar level_000_layer_000.json para colisiones; usando plataformas fallback.");
+        return null;
+    }
+
+    loadFallbackPlatforms() {
+        this.platforms.push(new Hitbox(40, 414 + 673, 138, 23));
+        this.platforms.push(new Hitbox(40, 437 + 673, 161, 23));
+        this.platforms.push(new Hitbox(201, 460 + 673, 46, 23));
+        this.platforms.push(new Hitbox(201, 483 + 673, 115, 23));
+        this.platforms.push(new Hitbox(224, 506 + 673, 115, 23));
+        this.platforms.push(new Hitbox(23, 598 + 673, 414, 23));
+        this.platforms.push(new Hitbox(523, 598 + 673, 253, 23));
     }
 
     update() {
@@ -194,7 +216,7 @@ class GameEngine {
 
             if (state.hitbox.intersects(keyHitbox)) {
                 this.leafKey.pickedBy = player.id;
-                console.log(`🔑 ${player.name} ha cogido la llave`);
+                console.log(`${player.name} ha cogido la llave`);
             }
         }
     }
@@ -238,7 +260,7 @@ class GameEngine {
 
     updateDeath(player, state) {
         const diedByZone = this.deathZones.find(dz => state.hitbox.intersects(dz));
-        const diedByFall = state.y > 1500;
+        const diedByFall = state.y > 1500 + 673;
 
         if (diedByZone || diedByFall) {
             if (this.leafKey.pickedBy === player.id) {
