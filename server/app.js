@@ -1,14 +1,61 @@
 const WebSocket = require("ws");
+const express = require("express");
+const http = require("http");
+const path = require("path");
+const fs = require("fs");
 
 const Player = require("./player");
 const PlayerRegistry = require("./playerRegistry");
 const Game = require("./game");
 
 const PORT = process.env.PORT || 3000;
+const SERVER_HOST = process.env.SERVER_HOST || "pico3.ieti.site";
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+const PORT = process.env.PORT || 3000;
 const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
 
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
+
+// Web con QR
+app.get("/web", (req, res) => {
+    const apkUrl = `https://${SERVER_HOST}/apk`;
+    const indexPath = path.join(__dirname, "..", "web", "index.html");
+
+    fs.readFile(indexPath, "utf8", (err, data) => {
+        if (err) {
+            console.error("Error al leer index.html:", err.message);
+            return res.status(500).send("Error al cargar la web");
+        }
+
+        const html = data.replace(/text:\s*"[^"]*"/, `text: "${apkUrl}"`);
+        res.send(html);
+    });
+});
+
+// Descargar APK
+app.get("/apk", (req, res) => {
+    const apkPath = path.join(__dirname, "..", "apk", "android-debug.apk");
+
+    if (!fs.existsSync(apkPath)) {
+        console.error("APK no encontrada en:", apkPath);
+        return res.status(404).send("APK no encontrada");
+    }
+
+    res.download(apkPath, "oceanpark.apk");
+});
+
+// Comprobación rápida
+app.get("/health", (req, res) => {
+    res.json({ ok: true });
+});
+
+// Archivos estáticos: index.html, qrcode.min.js, imágenes, css, etc.
+app.use(express.static(path.join(__dirname, "..", "web")));
 
 let SPAWN_X = 107;
 let SPAWN_Y = 385 + 673;
@@ -144,4 +191,8 @@ function broadcastState() {
     });
 }
 
-console.log(`Servidor Ocean Park en puerto ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Servidor Ocean Park en puerto ${PORT}`);
+    console.log(`Web: https://${SERVER_HOST}/web`);
+    console.log(`APK: https://${SERVER_HOST}/apk`);
+});
