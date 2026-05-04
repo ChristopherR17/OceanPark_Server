@@ -45,7 +45,7 @@ class GameEngine {
 
         // Llave
         this.leafKey.x = this.leafKey.initialX = 45;
-        this.leafKey.y = this.leafKey.initialY = 260 + 673;
+        this.leafKey.y = this.leafKey.initialY = 300 + 673;
 
         // Plataformas: se generan desde el tilemap real para que las colisiones
         // coincidan con lo que Android dibuja.
