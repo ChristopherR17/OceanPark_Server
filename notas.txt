@@ -45,7 +45,13 @@ json
 
 
 
+wscat -c ws://localhost:3000
 
+{"type":"MOVE","right":true}
+
+{"type":"JOIN","name":"Player1"}
+
+{"type":"JOIN","name":"Player2"}
 
 ================================
 EXPLICACION

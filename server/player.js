@@ -1,35 +1,54 @@
+const PlayerGameState = require("./playerGameState");
+
 class Player {
-    constructor(id, name, ws) {
+    constructor(id, name, spawnX, spawnY) {
         this.id = id;
         this.name = name;
-        this.ws = ws;
 
-        // Posición
-        this.x = 0;
-        this.y = 0;
+        this.spawnX = spawnX;
+        this.spawnY = spawnY;
 
-        // Velocidad
-        this.vx = 0;
-        this.vy = 0;
+        this.playerGameState = new PlayerGameState(spawnX, spawnY);
+    }
 
-        // Input
-        this.input = { 
-            left: false, 
-            right: false, 
-            jump: false 
-        };
+    getGameState() {
+        return this.playerGameState;
+    }
 
-        // Estado
-        this.onGround = true;
-        this.state = "IDLE";
-        this.facingRight = true;
-        this.isVisor = false;
-        
-        // Progreso
-        this.coins = 0;
-        this.deaths = 0;
-        this.passedDoor = false;
-        this.category = "Junior";
+    setThisMovement(direction) {
+        if (direction === "LEFT") {
+            this.playerGameState.isMovingLeft = true;
+            this.playerGameState.isMovingRight = false;
+        } else if (direction === "RIGHT") {
+            this.playerGameState.isMovingLeft = false;
+            this.playerGameState.isMovingRight = true;
+        } else if (direction === "NONE") {
+            this.playerGameState.isMovingLeft = false;
+            this.playerGameState.isMovingRight = false;
+        }
+    }
+
+    resetPosition() {
+        this.playerGameState.x = this.spawnX;
+        this.playerGameState.y = this.spawnY;
+        this.playerGameState.verticalSpeed = 0;
+        this.playerGameState.canJump = false;
+        this.playerGameState.hasFinishedLevel = false;
+        this.playerGameState.hitbox.updateHitboxPosition(this.playerGameState.x, this.playerGameState.y);
+    }
+
+    resetForNextLevel(spawnX, spawnY) {
+        this.spawnX = spawnX;
+        this.spawnY = spawnY;
+
+        this.playerGameState.x = spawnX;
+        this.playerGameState.y = spawnY;
+        this.playerGameState.verticalSpeed = 0;
+        this.playerGameState.isMovingLeft = false;
+        this.playerGameState.isMovingRight = false;
+        this.playerGameState.canJump = false;
+        this.playerGameState.hasFinishedLevel = false;
+        this.playerGameState.hitbox.updateHitboxPosition(spawnX, spawnY);
     }
 }
 
