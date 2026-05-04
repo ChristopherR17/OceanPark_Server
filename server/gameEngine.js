@@ -100,7 +100,7 @@ class GameEngine {
                     // Se interpreta como CENTRO, no como esquina superior izquierda.
                     // Como en el editor parece estar dibujado por encima de la pieza visual,
                     // este ajuste baja el rectángulo de colisión. Si aún flota, aumenta esto.
-                    centerYOffset: 122,
+                    centerYOffset: 90,
 
                     speed: 2,
                     loop: false,
@@ -666,7 +666,7 @@ class GameEngine {
             }
         }
 
-        for (const platform of this.getAllPlatforms()) {
+        for (const platform of this.platforms) {
             if (hitbox.intersects(platform)) {
                 return false;
             }
