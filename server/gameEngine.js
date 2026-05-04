@@ -711,6 +711,20 @@ class GameEngine {
         });
     }
 
+    resetToLevel1() {
+        this.levelChanging = false;
+        this.loadLevel(1);
+
+        const players = this.playerRegistry.getPlayersSnapshot();
+
+        players.forEach((player, index) => {
+            const spawn = this.getSpawnPosition(index);
+            player.resetForNextLevel(spawn.x, spawn.y);
+        });
+
+        console.log("Partida reiniciada al nivel 1.");
+    }
+
     goToLevel2(players) {
         this.goToLevel(2, players);
     }
