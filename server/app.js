@@ -15,9 +15,6 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const PORT = process.env.PORT || 3000;
-const wss = new WebSocket.Server({ port: PORT, host: "0.0.0.0" });
-
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
