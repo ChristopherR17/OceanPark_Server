@@ -247,6 +247,7 @@ class GameEngine {
         this.movingPlatforms.push({
             name: mpConfig.name,
             type: mpConfig.type || mpConfig.name,
+            tileId: Array.from(mpConfig.tileIds)[0],
             x: rect.x,
             y: rect.y,
             prevX: rect.x,
@@ -800,6 +801,7 @@ class GameEngine {
     getMovingPlatformsState() {
         return this.movingPlatforms.map(mp => ({
             name: mp.name,
+            tileId: mp.tileId,
             x: Math.round(mp.x),
             y: Math.round(mp.y),
             width: mp.width,
