@@ -115,10 +115,9 @@ function handleJoin(ws, data) {
     const newId = Math.random().toString(36).substr(2, 9);
 
     const spawnIndex = playerRegistry.getPlayersSnapshot().length;
-    const spawnX = SPAWN_X + spawnIndex * 40;
-    const spawnY = SPAWN_Y;
+    const spawn = game.gameEngine.getSpawnPosition(spawnIndex);
 
-    const newPlayer = new Player(newId, name, spawnX, spawnY);
+    const newPlayer = new Player(newId, name, spawn.x, spawn.y);
 
     playerRegistry.addPlayer(ws, newPlayer);
 
@@ -178,7 +177,8 @@ function broadcastState() {
         players: playersSnapshot,
         leafKey: game.gameEngine.getKeyState(),
         door: game.gameEngine.getDoorState(),
-        exitZone: game.gameEngine.getExitZoneState()
+        exitZone: game.gameEngine.getExitZoneState(),
+        button: game.gameEngine.getButtonState()
     });
 
     wss.clients.forEach(client => {
