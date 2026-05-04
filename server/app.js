@@ -178,7 +178,8 @@ function broadcastState() {
         leafKey: game.gameEngine.getKeyState(),
         door: game.gameEngine.getDoorState(),
         exitZone: game.gameEngine.getExitZoneState(),
-        button: game.gameEngine.getButtonState()
+        button: game.gameEngine.getButtonState(),
+        movingPlatforms: game.gameEngine.getMovingPlatformsState()
     });
 
     wss.clients.forEach(client => {

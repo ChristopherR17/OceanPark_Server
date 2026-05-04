@@ -3,7 +3,7 @@ const Hitbox = require("./hitbox");
 
 const TILE_SIZE = 23;
 
-// El cliente renderiza todos los niveles con estos offsets fijos en GameScreen.
+// El cliente renderiza los mapas con estos offsets fijos en GameScreen.
 const CLIENT_LAYER_X = -75;
 const CLIENT_LAYER_Y = 673;
 
@@ -18,6 +18,7 @@ class GameEngine {
         this.levelChanging = false;
 
         this.platforms = [];
+        this.movingPlatforms = [];
         this.deathZones = [];
 
         this.leafKey = {
@@ -45,14 +46,20 @@ class GameEngine {
             height: 100
         };
 
-        // Datos del editor, convertidos al mismo sistema Y-down que ya usaba el servidor:
-        // y_servidor = y_editor + 673.
+        /*
+         * IMPORTANTE SOBRE LA PLATAFORMA MÓVIL:
+         * La lógica está basada en el GameLogic de Laura:
+         * - El path NO es la hitbox.
+         * - Los puntos del path se tratan como CENTROS de destino.
+         * - La plataforma tiene su rectángulo propio: x, y, width, height.
+         * - Al moverse, se mueve el rectángulo cambiando su centro.
+         * - La colisión usa el rectángulo actual de la plataforma.
+         */
         this.levelConfigs = {
             1: {
                 tileMapFile: "level_000_layer_000.json",
                 layerX: CLIENT_LAYER_X,
                 layerY: CLIENT_LAYER_Y,
-                // Spawn ajustado a la parte superior de la primera plataforma real.
                 spawn: { x: 107, y: 414 + CLIENT_LAYER_Y - 32 },
                 key: { x: 45, y: 300 + CLIENT_LAYER_Y, width: 32, height: 32 },
                 door: { x: 260, y: 379 + CLIENT_LAYER_Y, width: 54, height: 38 },
@@ -66,20 +73,43 @@ class GameEngine {
                 tileMapFile: "level_001_layer_000.json",
                 layerX: CLIENT_LAYER_X,
                 layerY: CLIENT_LAYER_Y,
-                // En level_001 la primera plataforma jugable está en la fila 13:
-                // y = 13 * 23 + 673; el jugador mide 32.
                 spawn: { x: 107, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 32 },
-                key: { x: 414, y: 99 + CLIENT_LAYER_Y, width: 32, height: 32 },
+
+                // Bajada visual respecto al JSON original para que quede más alcanzable.
+                key: { x: 414, y: 115 + CLIENT_LAYER_Y, width: 32, height: 32 },
+
                 door: { x: 475, y: 181 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 button: { x: 342, y: 194 + CLIENT_LAYER_Y, width: 20, height: 22, pressed: false },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
                 fallY: 1500 + CLIENT_LAYER_Y,
                 nextLevel: null,
-                // IMPORTANTE: el tilemap tiene muchos tiles decorativos de pared.
-                // Si todos los id >= 0 son sólidos, el jugador colisiona con el decorado.
-                // Estos ids son las plataformas de suelo visibles principales.
-                solidTileIds: new Set([76, 77, 78])
+
+                // Tiles sólidos principales. El resto del mapa contiene mucho decorado/pared.
+                solidTileIds: new Set([76, 77, 78]),
+
+                movingPlatform: {
+                    name: "Movimiento",
+                    pathFile: "level_001_paths.json",
+
+                    // Plataforma de 4 tiles, como los bloques marrones.
+                    width: TILE_SIZE * 4,
+                    height: TILE_SIZE,
+
+                    // El path real subido es (278,177) -> (193,177).
+                    // Se interpreta como CENTRO, no como esquina superior izquierda.
+                    // Como en el editor parece estar dibujado por encima de la pieza visual,
+                    // este ajuste baja el rectángulo de colisión. Si aún flota, aumenta esto.
+                    centerYOffset: 122,
+
+                    speed: 2,
+                    loop: false,
+
+                    fallbackPoints: [
+                        { x: 278, y: 177 + CLIENT_LAYER_Y },
+                        { x: 193, y: 177 + CLIENT_LAYER_Y }
+                    ]
+                }
             }
         };
 
@@ -101,6 +131,7 @@ class GameEngine {
         this.currentConfig = config;
 
         this.platforms = [];
+        this.movingPlatforms = [];
         this.deathZones = [];
 
         this.leafKey.width = config.key.width;
@@ -123,6 +154,7 @@ class GameEngine {
         this.button = config.button ? { ...config.button, pressed: false } : null;
 
         this.loadPlatformsFromTileMap(levelNumber);
+        this.loadMovingPlatforms(levelNumber);
         this.deathZones.push(new Hitbox(-500, config.deathY, 3000, 100));
 
         console.log(`🗺️ Nivel cargado en servidor: ${this.level}`);
@@ -154,8 +186,6 @@ class GameEngine {
         const tileMap = layer.tileMap;
         const solidTileIds = config.solidTileIds || new Set();
 
-        // No todos los tiles visibles son suelo: muchos son decorado/fondo.
-        // Solo generamos colisiones con los ids marcados como plataforma.
         for (let row = 0; row < tileMap.length; row++) {
             let startCol = -1;
 
@@ -179,27 +209,143 @@ class GameEngine {
         }
     }
 
-    loadLevelLayer(levelNumber = this.level) {
+    loadMovingPlatforms(levelNumber = this.level) {
         const config = this.levelConfigs[levelNumber];
-        const fileName = config.tileMapFile;
+        const mpConfig = config.movingPlatform;
 
-        const candidates = [
+        if (!mpConfig) return;
+
+        let points = this.loadPathPoints(mpConfig.pathFile, mpConfig.name);
+
+        if (!points || points.length < 2) {
+            points = mpConfig.fallbackPoints;
+            console.warn(`No se pudo cargar una ruta válida para ${mpConfig.name}; usando fallback.`);
+        }
+
+        const centerYOffset = mpConfig.centerYOffset || 0;
+        const pathCenters = points.map(p => ({
+            x: p.x,
+            y: p.y + centerYOffset
+        }));
+
+        const firstCenter = pathCenters[0];
+
+        const x = firstCenter.x - mpConfig.width * 0.5;
+        const y = firstCenter.y - mpConfig.height * 0.5;
+
+        this.movingPlatforms.push({
+            name: mpConfig.name,
+            x,
+            y,
+            prevX: x,
+            prevY: y,
+            width: mpConfig.width,
+            height: mpConfig.height,
+            pathCenters,
+            targetIndex: 1,
+            speed: mpConfig.speed,
+            loop: mpConfig.loop,
+            active: false,
+            finished: false,
+            dx: 0,
+            dy: 0,
+            hitbox: new Hitbox(x, y, mpConfig.width, mpConfig.height)
+        });
+    }
+
+    loadPathPoints(fileName, pathName) {
+        const data = this.loadJsonFile(fileName, [
             `./${fileName}`,
-            `./tilemaps/${fileName}`,
+            `./paths/${fileName}`,
             path.join(__dirname, fileName),
-            path.join(__dirname, "tilemaps", fileName)
-        ];
+            path.join(__dirname, "paths", fileName)
+        ]);
 
+        if (!data) return null;
+
+        const rawPoints = this.extractPointsFromPathData(data, pathName);
+        if (!rawPoints || rawPoints.length < 2) return null;
+
+        return rawPoints.map(p => ({
+            x: Number(p.x),
+            y: Number(p.y) + CLIENT_LAYER_Y
+        })).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+    }
+
+    extractPointsFromPathData(data, pathName) {
+        const arraysToTry = [];
+
+        const collectFromNode = (node) => {
+            if (!node || typeof node !== "object") return;
+
+            const nodeName = node.name || node.type || node.id;
+            const matchesName = !pathName || nodeName === pathName;
+
+            if (matchesName) {
+                for (const key of ["points", "waypoints", "path", "nodes"]) {
+                    if (Array.isArray(node[key])) arraysToTry.push(node[key]);
+                }
+            }
+
+            if (Array.isArray(node)) {
+                node.forEach(collectFromNode);
+            } else {
+                Object.values(node).forEach(collectFromNode);
+            }
+        };
+
+        collectFromNode(data);
+
+        for (const arr of arraysToTry) {
+            const points = arr.map(item => this.normalizePoint(item)).filter(Boolean);
+            if (points.length >= 2) return points;
+        }
+
+        if (Array.isArray(data)) {
+            const points = data.map(item => this.normalizePoint(item)).filter(Boolean);
+            if (points.length >= 2) return points;
+        }
+
+        return null;
+    }
+
+    normalizePoint(item) {
+        if (!item || typeof item !== "object") return null;
+
+        if (Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y))) {
+            return { x: Number(item.x), y: Number(item.y) };
+        }
+
+        if (item.position && Number.isFinite(Number(item.position.x)) && Number.isFinite(Number(item.position.y))) {
+            return { x: Number(item.position.x), y: Number(item.position.y) };
+        }
+
+        return null;
+    }
+
+    loadJsonFile(fileName, candidates) {
         for (const file of candidates) {
             try {
                 return require(file);
             } catch (e) {
-                // Probar la siguiente ruta.
+                // Probar siguiente ruta.
             }
         }
 
-        console.error(`No se pudo cargar ${fileName} para colisiones; usando plataformas fallback.`);
+        console.error(`No se pudo cargar ${fileName}.`);
         return null;
+    }
+
+    loadLevelLayer(levelNumber = this.level) {
+        const config = this.levelConfigs[levelNumber];
+        const fileName = config.tileMapFile;
+
+        return this.loadJsonFile(fileName, [
+            `./${fileName}`,
+            `./tilemaps/${fileName}`,
+            path.join(__dirname, fileName),
+            path.join(__dirname, "tilemaps", fileName)
+        ]);
     }
 
     loadFallbackPlatforms() {
@@ -216,6 +362,12 @@ class GameEngine {
     update() {
         const players = this.playerRegistry.getPlayersSnapshot();
 
+        if (this.button) {
+            this.button.pressed = false;
+        }
+
+        this.updateMovingPlatforms(players);
+
         players.forEach(player => {
             const state = player.getGameState();
 
@@ -223,7 +375,10 @@ class GameEngine {
                 return;
             }
 
-            // 1. Movimiento horizontal
+            // Si estaba sobre una plataforma móvil antes de aplicar input/física,
+            // lo arrastramos con el delta de la plataforma.
+            this.carryPlayerIfOnMovingPlatform(state);
+
             let nextX = state.x;
 
             if (state.isMovingLeft) nextX -= this.speed;
@@ -235,13 +390,12 @@ class GameEngine {
                 state.x = nextX;
             }
 
-            // 2. Gravedad y movimiento vertical
             state.verticalSpeed += this.gravity;
 
             let nextY = state.y + state.verticalSpeed;
             const testHitboxY = new Hitbox(state.x, nextY, state.width, state.height);
 
-            let platformCol = this.platforms.find(p => testHitboxY.intersects(p));
+            let platformCol = this.getAllPlatforms().find(p => testHitboxY.intersects(p));
 
             let otherPlayerCol = players.find(other =>
                 other.id !== player.id &&
@@ -273,26 +427,96 @@ class GameEngine {
                 state.canJump = false;
             }
 
-            // 3. Actualizar hitbox
             state.hitbox.updateHitboxPosition(state.x, state.y);
 
-            // 4. Llave
             this.updateKey(player, state);
-
-            // 5. Botón del nivel 2, si existe
             this.updateButton(state);
-
-            // 6. Puerta
             this.updateDoor(player, state);
-
-            // 7. Detectar si ha cruzado la puerta
             this.updatePlayerFinishedLevel(player, state);
-
-            // 8. Muerte / caída
             this.updateDeath(player, state);
         });
 
         this.checkLevelChange(players);
+    }
+
+    getAllPlatforms() {
+        return [
+            ...this.platforms,
+            ...this.movingPlatforms.map(mp => mp.hitbox)
+        ];
+    }
+
+    updateMovingPlatforms() {
+        for (const mp of this.movingPlatforms) {
+            mp.prevX = mp.x;
+            mp.prevY = mp.y;
+            mp.dx = 0;
+            mp.dy = 0;
+
+            if (!mp.active || mp.finished || mp.pathCenters.length < 2) {
+                continue;
+            }
+
+            const currentCenter = this.platformCenter(mp);
+            const target = mp.pathCenters[mp.targetIndex];
+
+            const vx = target.x - currentCenter.x;
+            const vy = target.y - currentCenter.y;
+            const distance = Math.hypot(vx, vy);
+
+            if (distance <= mp.speed) {
+                this.setPlatformCenter(mp, target.x, target.y);
+
+                if (mp.targetIndex < mp.pathCenters.length - 1) {
+                    mp.targetIndex++;
+                } else if (mp.loop) {
+                    mp.targetIndex = 0;
+                } else {
+                    mp.finished = true;
+                }
+            } else {
+                this.setPlatformCenter(
+                    mp,
+                    currentCenter.x + (vx / distance) * mp.speed,
+                    currentCenter.y + (vy / distance) * mp.speed
+                );
+            }
+
+            mp.dx = mp.x - mp.prevX;
+            mp.dy = mp.y - mp.prevY;
+            mp.hitbox.updateHitboxPosition(mp.x, mp.y);
+        }
+    }
+
+    platformCenter(mp) {
+        return {
+            x: mp.x + mp.width * 0.5,
+            y: mp.y + mp.height * 0.5
+        };
+    }
+
+    setPlatformCenter(mp, x, y) {
+        mp.x = x - mp.width * 0.5;
+        mp.y = y - mp.height * 0.5;
+    }
+
+    carryPlayerIfOnMovingPlatform(state) {
+        for (const mp of this.movingPlatforms) {
+            if (mp.dx === 0 && mp.dy === 0) continue;
+
+            const playerBottom = state.y + state.height;
+            const wasOnTop =
+                Math.abs(playerBottom - mp.prevY) <= 6 &&
+                state.x + state.width > mp.prevX &&
+                state.x < mp.prevX + mp.width;
+
+            if (wasOnTop) {
+                state.x += mp.dx;
+                state.y += mp.dy;
+                state.hitbox.updateHitboxPosition(state.x, state.y);
+                return;
+            }
+        }
     }
 
     updateKey(player, state) {
@@ -327,15 +551,20 @@ class GameEngine {
             this.button.height
         );
 
-        this.button.pressed = state.hitbox.intersects(buttonHitbox);
+        if (state.hitbox.intersects(buttonHitbox)) {
+            this.button.pressed = true;
+            this.activateMovingPlatforms();
+        }
+    }
+
+    activateMovingPlatforms() {
+        for (const mp of this.movingPlatforms) {
+            mp.active = true;
+        }
     }
 
     updateDoor(player, state) {
         if (this.door.open) return;
-
-        // Mecánica actual: la llave abre la puerta.
-        // El botón del nivel 2 queda publicado como estado para poder dibujarlo/usar su asset
-        // desde el cliente sin romper la lógica existente.
         if (this.leafKey.pickedBy !== player.id) return;
 
         const doorHitbox = new Hitbox(
@@ -386,27 +615,22 @@ class GameEngine {
 
     checkLevelChange(players) {
         if (this.levelChanging) return;
+        if (!this.currentConfig.nextLevel) return;
         if (!this.door.open) return;
         if (players.length === 0) return;
 
         const everyoneFinished = players.every(p => p.playerGameState.hasFinishedLevel);
 
-        if (!everyoneFinished) return;
+        if (everyoneFinished) {
+            this.levelChanging = true;
 
-        const nextLevel = this.currentConfig.nextLevel;
+            console.log(`🎉 Todos los jugadores han cruzado. Cambiando al nivel ${this.currentConfig.nextLevel}...`);
 
-        if (!nextLevel) {
-            return;
+            setTimeout(() => {
+                this.goToLevel(this.currentConfig.nextLevel, players);
+                this.levelChanging = false;
+            }, 1000);
         }
-
-        this.levelChanging = true;
-
-        console.log(`🎉 Todos los jugadores han cruzado. Cambiando al nivel ${nextLevel}...`);
-
-        setTimeout(() => {
-            this.goToLevel(nextLevel, players);
-            this.levelChanging = false;
-        }, 1000);
     }
 
     goToLevel(levelNumber, players) {
@@ -418,7 +642,6 @@ class GameEngine {
         });
     }
 
-    // Compatibilidad con el nombre anterior.
     goToLevel2(players) {
         this.goToLevel(2, players);
     }
@@ -439,6 +662,12 @@ class GameEngine {
             );
 
             if (hitbox.intersects(doorHitbox)) {
+                return false;
+            }
+        }
+
+        for (const platform of this.getAllPlatforms()) {
+            if (hitbox.intersects(platform)) {
                 return false;
             }
         }
@@ -498,6 +727,19 @@ class GameEngine {
             height: this.button.height,
             pressed: this.button.pressed
         };
+    }
+
+    getMovingPlatformsState() {
+        return this.movingPlatforms.map(mp => ({
+            name: mp.name,
+            x: Math.round(mp.x),
+            y: Math.round(mp.y),
+            width: mp.width,
+            height: mp.height,
+            active: mp.active,
+            finished: mp.finished,
+            targetIndex: mp.targetIndex
+        }));
     }
 }
 

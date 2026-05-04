@@ -1,0 +1,28 @@
+{
+  "pathGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    }
+  ],
+  "paths": [
+    {
+      "id": "path_1",
+      "name": "Movimiento",
+      "points": [
+        {
+          "x": 278,
+          "y": 177
+        },
+        {
+          "x": 193,
+          "y": 177
+        }
+      ],
+      "color": "purple",
+      "groupId": "__main__"
+    }
+  ],
+  "pathBindings": []
+}
