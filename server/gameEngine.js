@@ -1,4 +1,11 @@
+const path = require("path");
 const Hitbox = require("./hitbox");
+
+const TILE_SIZE = 23;
+
+// El cliente renderiza todos los niveles con estos offsets fijos en GameScreen.
+const CLIENT_LAYER_X = -75;
+const CLIENT_LAYER_Y = 673;
 
 class GameEngine {
     constructor(playerRegistry) {
@@ -24,67 +31,147 @@ class GameEngine {
         };
 
         this.door = {
-            x: 260,
-            y: 379 + 673,
+            x: 0,
+            y: 0,
             width: 54,
             height: 38,
             open: false
         };
 
         this.exitZone = {
-            x: this.door.x + 45,
-            y: this.door.y - 40,
+            x: 0,
+            y: 0,
             width: 80,
             height: 100
         };
 
-        this.level2Spawn = {
-            x: 107,
-            y: 385 + 673
+        // Datos del editor, convertidos al mismo sistema Y-down que ya usaba el servidor:
+        // y_servidor = y_editor + 673.
+        this.levelConfigs = {
+            1: {
+                tileMapFile: "level_000_layer_000.json",
+                layerX: CLIENT_LAYER_X,
+                layerY: CLIENT_LAYER_Y,
+                // Spawn ajustado a la parte superior de la primera plataforma real.
+                spawn: { x: 107, y: 414 + CLIENT_LAYER_Y - 32 },
+                key: { x: 45, y: 300 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                door: { x: 260, y: 379 + CLIENT_LAYER_Y, width: 54, height: 38 },
+                exitOffset: { x: 45, y: -40, width: 80, height: 100 },
+                deathY: 900 + CLIENT_LAYER_Y,
+                fallY: 1500 + CLIENT_LAYER_Y,
+                nextLevel: 2,
+                useFallbackPlatforms: true
+            },
+            2: {
+                tileMapFile: "level_001_layer_000.json",
+                layerX: CLIENT_LAYER_X,
+                layerY: CLIENT_LAYER_Y,
+                // En level_001 la primera plataforma jugable está en la fila 13:
+                // y = 13 * 23 + 673; el jugador mide 32.
+                spawn: { x: 107, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 32 },
+                key: { x: 414, y: 99 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                door: { x: 475, y: 181 + CLIENT_LAYER_Y, width: 54, height: 38 },
+                button: { x: 342, y: 194 + CLIENT_LAYER_Y, width: 20, height: 22, pressed: false },
+                exitOffset: { x: 45, y: -40, width: 80, height: 100 },
+                deathY: 900 + CLIENT_LAYER_Y,
+                fallY: 1500 + CLIENT_LAYER_Y,
+                nextLevel: null,
+                // IMPORTANTE: el tilemap tiene muchos tiles decorativos de pared.
+                // Si todos los id >= 0 son sólidos, el jugador colisiona con el decorado.
+                // Estos ids son las plataformas de suelo visibles principales.
+                solidTileIds: new Set([76, 77, 78])
+            }
         };
 
-        // Llave
-        this.leafKey.x = this.leafKey.initialX = 45;
-        this.leafKey.y = this.leafKey.initialY = 260 + 673;
+        this.currentConfig = null;
+        this.button = null;
 
-        // Plataformas: se generan desde el tilemap real para que las colisiones
-        // coincidan con lo que Android dibuja.
-        // IMPORTANTE: solo se usan tiles de superficie/suelo, no toda la pared de fondo.
-        this.loadPlatformsFromTileMap();
-
-        this.deathZones.push(new Hitbox(-500, 900 + 673, 3000, 100));
+        this.loadLevel(1);
     }
 
-    loadPlatformsFromTileMap() {
-        const layer = this.loadLevelLayer();
+    loadLevel(levelNumber) {
+        const config = this.levelConfigs[levelNumber];
+
+        if (!config) {
+            console.error(`No existe configuración para el nivel ${levelNumber}`);
+            return;
+        }
+
+        this.level = levelNumber;
+        this.currentConfig = config;
+
+        this.platforms = [];
+        this.deathZones = [];
+
+        this.leafKey.width = config.key.width;
+        this.leafKey.height = config.key.height;
+        this.leafKey.initialX = config.key.x;
+        this.leafKey.initialY = config.key.y;
+        this.resetKey();
+
+        this.door.x = config.door.x;
+        this.door.y = config.door.y;
+        this.door.width = config.door.width;
+        this.door.height = config.door.height;
+        this.door.open = false;
+
+        this.exitZone.x = this.door.x + config.exitOffset.x;
+        this.exitZone.y = this.door.y + config.exitOffset.y;
+        this.exitZone.width = config.exitOffset.width;
+        this.exitZone.height = config.exitOffset.height;
+
+        this.button = config.button ? { ...config.button, pressed: false } : null;
+
+        this.loadPlatformsFromTileMap(levelNumber);
+        this.deathZones.push(new Hitbox(-500, config.deathY, 3000, 100));
+
+        console.log(`🗺️ Nivel cargado en servidor: ${this.level}`);
+    }
+
+    getSpawnPosition(index = 0) {
+        const spawn = this.currentConfig.spawn;
+        return {
+            x: spawn.x + index * 40,
+            y: spawn.y
+        };
+    }
+
+    loadPlatformsFromTileMap(levelNumber = this.level) {
+        const layer = this.loadLevelLayer(levelNumber);
 
         if (!layer || !layer.tileMap) {
             this.loadFallbackPlatforms();
             return;
         }
 
-        const TILE_SIZE = 23;
-        const LAYER_X = -75;
-        const LAYER_Y = 673;
+        const config = this.levelConfigs[levelNumber];
+
+        if (config.useFallbackPlatforms) {
+            this.loadFallbackPlatforms();
+            return;
+        }
 
         const tileMap = layer.tileMap;
+        const solidTileIds = config.solidTileIds || new Set();
 
-        // Todos los tiles visibles (id >= 0) son sólidos
+        // No todos los tiles visibles son suelo: muchos son decorado/fondo.
+        // Solo generamos colisiones con los ids marcados como plataforma.
         for (let row = 0; row < tileMap.length; row++) {
             let startCol = -1;
 
             for (let col = 0; col <= tileMap[row].length; col++) {
                 const id = col < tileMap[row].length ? tileMap[row][col] : -1;
-                const isSolid = id >= 0;
+                const isSolid = solidTileIds.has(id);
 
                 if (isSolid && startCol === -1) {
                     startCol = col;
                 }
 
                 if (!isSolid && startCol !== -1) {
-                    const x = LAYER_X + startCol * TILE_SIZE;
-                    const y = LAYER_Y + row * TILE_SIZE;
+                    const x = config.layerX + startCol * TILE_SIZE;
+                    const y = config.layerY + row * TILE_SIZE;
                     const width = (col - startCol) * TILE_SIZE;
+
                     this.platforms.push(new Hitbox(x, y, width, TILE_SIZE));
                     startCol = -1;
                 }
@@ -92,10 +179,15 @@ class GameEngine {
         }
     }
 
-    loadLevelLayer() {
+    loadLevelLayer(levelNumber = this.level) {
+        const config = this.levelConfigs[levelNumber];
+        const fileName = config.tileMapFile;
+
         const candidates = [
-            "./level_000_layer_000.json",
-            "./tilemaps/level_000_layer_000.json"
+            `./${fileName}`,
+            `./tilemaps/${fileName}`,
+            path.join(__dirname, fileName),
+            path.join(__dirname, "tilemaps", fileName)
         ];
 
         for (const file of candidates) {
@@ -106,18 +198,19 @@ class GameEngine {
             }
         }
 
-        console.error("No se pudo cargar level_000_layer_000.json para colisiones; usando plataformas fallback.");
+        console.error(`No se pudo cargar ${fileName} para colisiones; usando plataformas fallback.`);
         return null;
     }
 
     loadFallbackPlatforms() {
-        this.platforms.push(new Hitbox(40, 414 + 673, 138, 23));
-        this.platforms.push(new Hitbox(40, 437 + 673, 161, 23));
-        this.platforms.push(new Hitbox(201, 460 + 673, 46, 23));
-        this.platforms.push(new Hitbox(201, 483 + 673, 115, 23));
-        this.platforms.push(new Hitbox(224, 506 + 673, 115, 23));
-        this.platforms.push(new Hitbox(23, 598 + 673, 414, 23));
-        this.platforms.push(new Hitbox(523, 598 + 673, 253, 23));
+        // Fallback del nivel 1 original.
+        this.platforms.push(new Hitbox(40, 414 + CLIENT_LAYER_Y, 138, 23));
+        this.platforms.push(new Hitbox(40, 437 + CLIENT_LAYER_Y, 161, 23));
+        this.platforms.push(new Hitbox(201, 460 + CLIENT_LAYER_Y, 46, 23));
+        this.platforms.push(new Hitbox(201, 483 + CLIENT_LAYER_Y, 115, 23));
+        this.platforms.push(new Hitbox(224, 506 + CLIENT_LAYER_Y, 115, 23));
+        this.platforms.push(new Hitbox(23, 598 + CLIENT_LAYER_Y, 414, 23));
+        this.platforms.push(new Hitbox(523, 598 + CLIENT_LAYER_Y, 253, 23));
     }
 
     update() {
@@ -186,13 +279,16 @@ class GameEngine {
             // 4. Llave
             this.updateKey(player, state);
 
-            // 5. Puerta
+            // 5. Botón del nivel 2, si existe
+            this.updateButton(state);
+
+            // 6. Puerta
             this.updateDoor(player, state);
 
-            // 6. Detectar si ha cruzado la puerta
+            // 7. Detectar si ha cruzado la puerta
             this.updatePlayerFinishedLevel(player, state);
 
-            // 7. Muerte / caída
+            // 8. Muerte / caída
             this.updateDeath(player, state);
         });
 
@@ -221,8 +317,25 @@ class GameEngine {
         }
     }
 
+    updateButton(state) {
+        if (!this.button) return;
+
+        const buttonHitbox = new Hitbox(
+            this.button.x,
+            this.button.y,
+            this.button.width,
+            this.button.height
+        );
+
+        this.button.pressed = state.hitbox.intersects(buttonHitbox);
+    }
+
     updateDoor(player, state) {
         if (this.door.open) return;
+
+        // Mecánica actual: la llave abre la puerta.
+        // El botón del nivel 2 queda publicado como estado para poder dibujarlo/usar su asset
+        // desde el cliente sin romper la lógica existente.
         if (this.leafKey.pickedBy !== player.id) return;
 
         const doorHitbox = new Hitbox(
@@ -260,7 +373,7 @@ class GameEngine {
 
     updateDeath(player, state) {
         const diedByZone = this.deathZones.find(dz => state.hitbox.intersects(dz));
-        const diedByFall = state.y > 1500 + 673;
+        const diedByFall = state.y > this.currentConfig.fallY;
 
         if (diedByZone || diedByFall) {
             if (this.leafKey.pickedBy === player.id) {
@@ -278,40 +391,36 @@ class GameEngine {
 
         const everyoneFinished = players.every(p => p.playerGameState.hasFinishedLevel);
 
-        if (everyoneFinished) {
-            this.levelChanging = true;
+        if (!everyoneFinished) return;
 
-            console.log("🎉 Todos los jugadores han cruzado. Cambiando al nivel 2...");
+        const nextLevel = this.currentConfig.nextLevel;
 
-            setTimeout(() => {
-                this.goToLevel2(players);
-                this.levelChanging = false;
-            }, 1000);
+        if (!nextLevel) {
+            return;
         }
+
+        this.levelChanging = true;
+
+        console.log(`🎉 Todos los jugadores han cruzado. Cambiando al nivel ${nextLevel}...`);
+
+        setTimeout(() => {
+            this.goToLevel(nextLevel, players);
+            this.levelChanging = false;
+        }, 1000);
     }
 
-    goToLevel2(players) {
-        this.level = 2;
+    goToLevel(levelNumber, players) {
+        this.loadLevel(levelNumber);
 
         players.forEach((player, index) => {
-            const spawnX = this.level2Spawn.x + index * 40;
-            const spawnY = this.level2Spawn.y;
-
-            player.resetForNextLevel(spawnX, spawnY);
+            const spawn = this.getSpawnPosition(index);
+            player.resetForNextLevel(spawn.x, spawn.y);
         });
+    }
 
-        this.resetKey();
-
-        this.door.open = false;
-
-        // Puedes cambiar estas coordenadas cuando tengas el mapa real del nivel 2
-        this.door.x = 1000;
-        this.door.y = 385;
-
-        this.exitZone.x = this.door.x + 35;
-        this.exitZone.y = this.door.y - 20;
-
-        console.log("🗺️ Nivel actual:", this.level);
+    // Compatibilidad con el nombre anterior.
+    goToLevel2(players) {
+        this.goToLevel(2, players);
     }
 
     resetKey() {
@@ -376,6 +485,18 @@ class GameEngine {
             y: Math.round(this.exitZone.y),
             width: this.exitZone.width,
             height: this.exitZone.height
+        };
+    }
+
+    getButtonState() {
+        if (!this.button) return null;
+
+        return {
+            x: Math.round(this.button.x),
+            y: Math.round(this.button.y),
+            width: this.button.width,
+            height: this.button.height,
+            pressed: this.button.pressed
         };
     }
 }
