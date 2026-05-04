@@ -79,7 +79,7 @@ class GameEngine {
                 key: { x: 414, y: 115 + CLIENT_LAYER_Y, width: 32, height: 32 },
 
                 door: { x: 475, y: 181 + CLIENT_LAYER_Y, width: 54, height: 38 },
-                button: { x: 342, y: 194 + CLIENT_LAYER_Y, width: 20, height: 22, pressed: false },
+                button: { x: 445, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 22, width: 20, height: 22, pressed: false },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
                 fallY: 1500 + CLIENT_LAYER_Y,
@@ -90,20 +90,17 @@ class GameEngine {
 
                 movingPlatform: {
                     name: "Movimiento",
+                    type: "Movimiento",
                     pathFile: "level_001_paths.json",
 
-                    // Plataforma de 4 tiles, como los bloques marrones.
-                    width: TILE_SIZE * 4,
-                    height: TILE_SIZE,
-
-                    // El path real subido es (278,177) -> (193,177).
-                    // Se interpreta como CENTRO, no como esquina superior izquierda.
-                    // Como en el editor parece estar dibujado por encima de la pieza visual,
-                    // este ajuste baja el rectángulo de colisión. Si aún flota, aumenta esto.
-                    centerYOffset: 90,
+                    // Se detecta desde el tilemap igual que el suelo.
+                    // En level_001 los bloques marrones de la plataforma son id 145.
+                    tileIds: new Set([145]),
 
                     speed: 2,
-                    loop: false,
+
+                    // Movimiento continuo izquierda <-> derecha tras pulsar el botón.
+                    loop: true,
 
                     fallbackPoints: [
                         { x: 278, y: 177 + CLIENT_LAYER_Y },
@@ -215,6 +212,13 @@ class GameEngine {
 
         if (!mpConfig) return;
 
+        const rect = this.findMovingPlatformRectFromTileMap(levelNumber, mpConfig);
+
+        if (!rect) {
+            console.warn(`No se encontró la plataforma móvil ${mpConfig.name} en el tilemap.`);
+            return;
+        }
+
         let points = this.loadPathPoints(mpConfig.pathFile, mpConfig.name);
 
         if (!points || points.length < 2) {
@@ -222,35 +226,86 @@ class GameEngine {
             console.warn(`No se pudo cargar una ruta válida para ${mpConfig.name}; usando fallback.`);
         }
 
-        const centerYOffset = mpConfig.centerYOffset || 0;
+        /*
+         * El tilemap define la posición real de la plataforma.
+         * El path define cuánto se desplaza.
+         *
+         * Así la hitbox coincide con los bloques dibujados y el path deja de
+         * colocar la plataforma en una posición falsa.
+         */
+        const startCenter = {
+            x: rect.x + rect.width * 0.5,
+            y: rect.y + rect.height * 0.5
+        };
+
+        const firstPoint = points[0];
         const pathCenters = points.map(p => ({
-            x: p.x,
-            y: p.y + centerYOffset
+            x: startCenter.x + (p.x - firstPoint.x),
+            y: startCenter.y + (p.y - firstPoint.y)
         }));
-
-        const firstCenter = pathCenters[0];
-
-        const x = firstCenter.x - mpConfig.width * 0.5;
-        const y = firstCenter.y - mpConfig.height * 0.5;
 
         this.movingPlatforms.push({
             name: mpConfig.name,
-            x,
-            y,
-            prevX: x,
-            prevY: y,
-            width: mpConfig.width,
-            height: mpConfig.height,
+            type: mpConfig.type || mpConfig.name,
+            x: rect.x,
+            y: rect.y,
+            prevX: rect.x,
+            prevY: rect.y,
+            width: rect.width,
+            height: rect.height,
             pathCenters,
             targetIndex: 1,
+            direction: 1,
             speed: mpConfig.speed,
             loop: mpConfig.loop,
             active: false,
             finished: false,
             dx: 0,
             dy: 0,
-            hitbox: new Hitbox(x, y, mpConfig.width, mpConfig.height)
+            hitbox: new Hitbox(rect.x, rect.y, rect.width, rect.height)
         });
+    }
+
+    findMovingPlatformRectFromTileMap(levelNumber, mpConfig) {
+        const layer = this.loadLevelLayer(levelNumber);
+        const config = this.levelConfigs[levelNumber];
+
+        if (!layer || !layer.tileMap) return null;
+
+        const tileMap = layer.tileMap;
+        const tileIds = mpConfig.tileIds || new Set();
+
+        let best = null;
+
+        for (let row = 0; row < tileMap.length; row++) {
+            let startCol = -1;
+
+            for (let col = 0; col <= tileMap[row].length; col++) {
+                const id = col < tileMap[row].length ? tileMap[row][col] : -1;
+                const isPlatformTile = tileIds.has(id);
+
+                if (isPlatformTile && startCol === -1) {
+                    startCol = col;
+                }
+
+                if (!isPlatformTile && startCol !== -1) {
+                    const rect = {
+                        x: config.layerX + startCol * TILE_SIZE,
+                        y: config.layerY + row * TILE_SIZE,
+                        width: (col - startCol) * TILE_SIZE,
+                        height: TILE_SIZE
+                    };
+
+                    if (!best || rect.width > best.width) {
+                        best = rect;
+                    }
+
+                    startCol = -1;
+                }
+            }
+        }
+
+        return best;
     }
 
     loadPathPoints(fileName, pathName) {
@@ -453,7 +508,7 @@ class GameEngine {
             mp.dx = 0;
             mp.dy = 0;
 
-            if (!mp.active || mp.finished || mp.pathCenters.length < 2) {
+            if (!mp.active || mp.pathCenters.length < 2) {
                 continue;
             }
 
@@ -467,12 +522,25 @@ class GameEngine {
             if (distance <= mp.speed) {
                 this.setPlatformCenter(mp, target.x, target.y);
 
-                if (mp.targetIndex < mp.pathCenters.length - 1) {
-                    mp.targetIndex++;
-                } else if (mp.loop) {
-                    mp.targetIndex = 0;
+                if (mp.loop) {
+                    /*
+                     * Movimiento continuo tipo ping-pong:
+                     * 0 -> 1 -> 0 -> 1...
+                     * Para más de dos puntos: 0 -> 1 -> 2 -> 1 -> 0...
+                     */
+                    if (mp.targetIndex >= mp.pathCenters.length - 1) {
+                        mp.direction = -1;
+                    } else if (mp.targetIndex <= 0) {
+                        mp.direction = 1;
+                    }
+
+                    mp.targetIndex += mp.direction;
                 } else {
-                    mp.finished = true;
+                    if (mp.targetIndex < mp.pathCenters.length - 1) {
+                        mp.targetIndex++;
+                    } else {
+                        mp.finished = true;
+                    }
                 }
             } else {
                 this.setPlatformCenter(
