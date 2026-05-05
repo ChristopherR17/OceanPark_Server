@@ -1,0 +1,996 @@
+Pantalla de inicio:
+- Go
+- Lista de jugadores
+- Introducir nickname
+
+Primera pantalla:
+- Mapa fijo
+- Llave
+- Imagen de los 2 jugadores
+
+================================
+Server:
+================================
+- Manda el nombre del sprite que usará cada jugador
+- Generar posiciones de las plataformas y enviarlas
+
+
+json
+{"type": "MOVE", "left": "true"}
+
+{"type": "JOIN", "name": "player"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+wscat -c ws://localhost:3000
+
+{"type":"MOVE","right":true}
+
+{"type":"JOIN","name":"Player1"}
+
+{"type":"JOIN","name":"Player2"}
+
+================================
+EXPLICACION
+================================
+Sí. Te explico todo tu código actual de forma ordenada, archivo por archivo, y también cómo se conecta todo entre sí.
+
+Voy a asumir que tu código actual es el que hemos dejado con estas piezas:
+
+src/server.js
+src/player.js
+src/room.js
+src/gameLoop.js
+src/logger.js
+package.json
+.env
+scripts de Proxmox/deploy
+Visión general del proyecto
+
+Tu proyecto es un servidor WebSocket para un juego multijugador simple.
+
+La idea general es:
+
+el servidor escucha conexiones
+cada cliente que entra recibe una conexión WebSocket
+cuando un cliente manda JOIN, se crea un jugador
+los jugadores se guardan en una sala (Room)
+cuando hay suficientes jugadores, la sala pasa a estado playing
+un gameLoop se ejecuta muchas veces por segundo
+ese loop actualiza física y posiciones
+el servidor envía el estado actual a todos los jugadores
+
+En resumen:
+
+mensaje del cliente → actualizar jugador → game loop → broadcast del estado
+
+1. src/server.js
+
+Este es el archivo principal.
+Se encarga de:
+
+arrancar el servidor
+aceptar conexiones
+procesar mensajes
+quitar jugadores al desconectar
+enviar estados a todos
+Imports
+const WebSocket = require("ws");
+const crypto = require("crypto");
+require("dotenv").config();
+
+const Room = require("./room");
+const Player = require("./player");
+const startGameLoop = require("./gameLoop");
+const logger = require("./logger");
+Qué hace cada uno
+ws: librería para WebSockets en Node.js
+crypto: la usas para generar IDs únicas con randomUUID()
+dotenv: carga variables desde .env
+Room: clase que gestiona la sala y los jugadores
+Player: clase que representa a un jugador
+startGameLoop: función que lanza el bucle del juego
+logger: sistema de logs
+Puerto del servidor
+const SERVER_PORT = process.env.SERVER_PORT || 3000;
+
+Aquí dices:
+
+si existe SERVER_PORT en .env, úsalo
+si no, usa 3000
+
+Eso hace el servidor configurable.
+
+Crear servidor WebSocket
+const wss = new WebSocket.Server({ port: SERVER_PORT });
+const room = new Room();
+
+logger.info(`Server running on ${SERVER_PORT}`);
+Qué pasa aquí
+wss es el servidor WebSocket
+room es la única sala del juego
+dejas constancia en logs de que el servidor arrancó
+
+Tu arquitectura actual usa una sola sala global.
+
+Evento connection
+wss.on("connection", (ws) => {
+  const playerId = crypto.randomUUID();
+
+  logger.info(`Client connected: ${playerId}`);
+
+Cada vez que un cliente se conecta:
+
+se crea un objeto ws para esa conexión
+generas un playerId único
+registras que alguien se conectó
+Importante
+
+Aquí todavía no existe el jugador como tal.
+Solo existe una conexión abierta.
+El jugador real se crea cuando llegue el mensaje JOIN.
+
+Evento message
+  ws.on("message", (msg) => {
+    try {
+      const data = JSON.parse(msg);
+      handleMessage(ws, playerId, data);
+    } catch (error) {
+      logger.error(`Invalid JSON from: ${playerId}`);
+    }
+  });
+
+Cuando el cliente manda un mensaje:
+
+recibes msg
+intentas convertirlo de texto JSON a objeto con JSON.parse
+si funciona, llamas a handleMessage
+si falla, registras error
+Qué significa eso
+
+El cliente debe mandar mensajes como este:
+
+{ "type": "JOIN", "name": "Chris" }
+
+o:
+
+{ "type": "MOVE", "left": true, "jump": false }
+Evento close
+  ws.on("close", () => {
+    room.removePlayer(playerId);
+
+    if (!room.isReady()) {
+      room.setState("waiting");
+    }
+
+    logger.info(`Client disconnected: ${playerId}`);
+  });
+
+Cuando un cliente se desconecta:
+
+lo eliminas de la sala
+si ya no hay suficientes jugadores, vuelves al estado "waiting"
+registras la desconexión
+Lógica importante
+
+Si por ejemplo el mínimo son 2 jugadores:
+
+entran 2 → playing
+sale 1 → vuelves a waiting
+Evento error
+  ws.on("error", (error) => {
+    logger.error(`Socket error from ${playerId}: ${error.message}`);
+  });
+});
+
+Si la conexión WebSocket da error:
+
+lo registras en logs
+ayuda a depurar problemas de red o cliente
+Función handleMessage
+
+Esta es la función que interpreta los mensajes del cliente.
+
+function handleMessage(ws, id, data) {
+
+Recibe:
+
+ws: la conexión del cliente
+id: ID del jugador/conexión
+data: objeto JSON ya parseado
+Validación básica
+  if (!data || typeof data.type !== "string") {
+    ws.send(JSON.stringify({ type: "ERROR", message: "Invalid message format" }));
+    return;
+  }
+
+Compruebas que:
+
+exista data
+tenga una propiedad type
+type sea string
+
+Si no, respondes al cliente con un error.
+
+case "JOIN"
+case "JOIN": {
+
+Este mensaje significa:
+“quiero entrar a la partida”.
+
+Evitar doble JOIN
+if (room.players.has(id)) {
+  ws.send(JSON.stringify({ type: "ERROR", message: "Player already joined" }));
+  return;
+}
+
+Si ese cliente ya está dentro de la sala, no lo vuelves a meter.
+
+Validar nombre
+const name =
+  typeof data.name === "string" && data.name.trim()
+    ? data.name.trim()
+    : "Anonymous";
+
+Aquí haces:
+
+si data.name es un string válido y no vacío, lo usas
+si no, le pones "Anonymous"
+
+Esto evita nombres vacíos o inválidos.
+
+Crear jugador
+const player = new Player(id, name, ws);
+const added = room.addPlayer(player);
+
+Creas una instancia de Player con:
+
+id
+name
+ws
+
+Y luego intentas añadirlo a la sala.
+
+Si la sala está llena
+if (!added) {
+  ws.send(JSON.stringify({ type: "ERROR", message: "Room is full" }));
+  return;
+}
+
+room.addPlayer() devuelve false si la sala ya llegó al máximo.
+Entonces avisas al cliente.
+
+Confirmación al cliente
+ws.send(
+  JSON.stringify({
+    type: "JOINED",
+    playerId: id,
+    name: player.name,
+  })
+);
+
+Le dices al cliente:
+
+que ha entrado correctamente
+cuál es su playerId
+qué nombre se le asignó
+
+Esto es útil porque el cliente puede guardar su ID.
+
+Pasar a playing
+if (room.isReady() && room.state !== "playing") {
+  room.setState("playing");
+  logger.info("Room state changed to playing");
+}
+
+Si la sala tiene el mínimo de jugadores:
+
+cambias el estado a playing
+lo registras
+
+Esto es lo que activa realmente la lógica del juego en el loop.
+
+case "MOVE"
+case "MOVE": {
+
+Este mensaje significa:
+“quiero mover a mi personaje”.
+
+Buscar jugador
+const player = room.players.get(id);
+if (!player) {
+  ws.send(JSON.stringify({ type: "ERROR", message: "Player not found" }));
+  return;
+}
+
+Buscas al jugador por su ID.
+Si no existe, mandas error.
+
+Constantes de salto y suelo
+const JUMP_FORCE = -12;
+const GROUND_Y = 100;
+JUMP_FORCE = -12: impulso hacia arriba
+GROUND_Y = 100: altura del suelo
+
+En este sistema, subir significa ir hacia valores menores de y.
+
+Movimiento horizontal
+if (data.left) player.vx = -5;
+else if (data.right) player.vx = 5;
+else player.vx = 0;
+
+Aquí no cambias directamente x.
+Cambias la velocidad horizontal vx.
+
+izquierda → vx = -5
+derecha → vx = 5
+ninguna → vx = 0
+
+Eso es mejor que modificar la posición directamente, porque el gameLoop es quien luego mueve al personaje.
+
+Salto real
+if (data.jump && player.y >= GROUND_Y) {
+  player.vy = JUMP_FORCE;
+}
+
+Solo permites saltar si el jugador está en el suelo.
+
+Cuando salta:
+
+le das velocidad vertical negativa
+luego el loop aplicará gravedad
+subirá y luego caerá
+default
+default:
+  ws.send(JSON.stringify({ type: "ERROR", message: "Unknown message type" }));
+  break;
+
+Si el mensaje no es JOIN ni MOVE, respondes con error.
+
+Función broadcast
+function broadcast(data) {
+  const msg = JSON.stringify(data);
+
+  room.players.forEach((player) => {
+    if (player.ws.readyState === WebSocket.OPEN) {
+      player.ws.send(msg);
+    }
+  });
+}
+
+Esta función envía un mensaje a todos los jugadores de la sala.
+
+Qué hace exactamente
+convierte data a JSON string
+recorre todos los jugadores
+comprueba que su socket sigue abierto
+manda el mensaje
+Por qué está bien así
+
+Antes podrías enviar a todos los wss.clients, pero ahora lo haces solo a los jugadores válidos que tú gestionas en room.players.
+
+Eso es más limpio y más útil para el juego.
+
+Lanzar el game loop
+startGameLoop(room, broadcast);
+
+Aquí arrancas el bucle principal del juego y le pasas:
+
+la sala
+la función para enviar estados
+2. src/player.js
+class Player {
+  constructor(id, name, ws) {
+    this.id = id;
+    this.name = name;
+
+    this.ws = ws;
+
+    this.x = 100;
+    this.y = 100;
+
+    this.vx = 0;
+    this.vy = 0;
+  }
+}
+
+module.exports = Player;
+
+Esta clase representa a un jugador del juego.
+
+Propiedades
+id
+
+Identificador único del jugador.
+
+Sirve para:
+
+distinguir jugadores
+buscarlos en el Map
+mantener identidad lógica
+name
+
+Nombre del jugador.
+
+ws
+
+La conexión WebSocket asociada a ese jugador.
+
+Sirve para:
+
+enviar mensajes privados
+saber qué socket pertenece a quién
+preparar reconexión futura
+x, y
+
+Posición del jugador en el mundo.
+
+Empieza en:
+
+x = 100
+y = 100
+vx, vy
+
+Velocidad del jugador.
+
+vx: velocidad horizontal
+vy: velocidad vertical
+
+El juego no mueve directamente al personaje todo el rato; muchas veces cambia la velocidad, y luego el loop aplica el movimiento.
+
+3. src/room.js
+
+Aunque no lo hayas vuelto a tocar mucho, es una pieza clave.
+
+Tu Room hace de gestor de partida.
+
+Seguramente lo tienes así o muy parecido:
+
+const logger = require("./logger");
+
+class Room {
+  constructor() {
+    this.players = new Map();
+    this.state = "waiting";
+    this.maxPlayers = 8;
+    this.minPlayers = 2;
+  }
+
+  addPlayer(player) {
+    if (this.players.size >= this.maxPlayers) {
+      logger.warn("Room is full");
+      return false;
+    }
+
+    this.players.set(player.id, player);
+    logger.info(`Player added: ${player.id} (${player.name})`);
+    return true;
+  }
+
+  removePlayer(id) {
+    const existed = this.players.delete(id);
+
+    if (existed) {
+      logger.info(`Player removed: ${id}`);
+    }
+  }
+
+  getPlayers() {
+    return Array.from(this.players.values());
+  }
+
+  isReady() {
+    return this.players.size >= this.minPlayers;
+  }
+
+  setState(state) {
+    this.state = state;
+    logger.info(`Room state set to: ${state}`);
+  }
+}
+
+module.exports = Room;
+Qué representa Room
+
+La sala contiene:
+
+la lista de jugadores
+el estado de la partida
+límites de jugadores
+this.players = new Map()
+
+Usas un Map donde:
+
+clave = player.id
+valor = objeto Player
+
+Ventaja:
+buscar un jugador por ID es rápido y claro.
+
+state
+this.state = "waiting";
+
+Puede estar en:
+
+"waiting": esperando jugadores
+"playing": partida en marcha
+maxPlayers y minPlayers
+this.maxPlayers = 8;
+this.minPlayers = 2;
+no pueden entrar más de 8
+para empezar el juego necesitas al menos 2
+addPlayer(player)
+
+Añade un jugador si hay hueco.
+Si no lo hay, devuelve false.
+
+removePlayer(id)
+
+Borra un jugador por su ID.
+
+getPlayers()
+return Array.from(this.players.values());
+
+Convierte el Map en un array de jugadores.
+Esto es útil para serializarlo y enviarlo al cliente.
+
+isReady()
+
+Devuelve true si ya hay suficientes jugadores para empezar.
+
+setState(state)
+
+Cambia el estado de la sala.
+
+4. src/gameLoop.js
+
+Este archivo es el corazón del “tiempo real” del juego.
+
+function startGameLoop(room, broadcast) {
+  const FPS = 20;
+  const FRAME_TIME = 1000 / FPS;
+
+  const GRAVITY = 1;
+  const GROUND_Y = 100;
+
+  setInterval(() => {
+    if (room.state !== "playing") return;
+
+    room.players.forEach((player) => {
+      // aplicar gravedad
+      player.vy += GRAVITY;
+
+      // mover
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // colisión con suelo
+      if (player.y > GROUND_Y) {
+        player.y = GROUND_Y;
+        player.vy = 0;
+      }
+    });
+
+    broadcast({
+      type: "STATE",
+      players: room.getPlayers(),
+    });
+  }, FRAME_TIME);
+}
+
+module.exports = startGameLoop;
+Qué hace
+
+Ejecuta una función repetidamente cada cierto tiempo.
+
+FPS y FRAME_TIME
+const FPS = 20;
+const FRAME_TIME = 1000 / FPS;
+
+Quieres 20 actualizaciones por segundo.
+
+1000 ms / 20 = 50 ms
+cada 50 ms haces una actualización
+Solo corre si la sala está jugando
+if (room.state !== "playing") return;
+
+Si todavía no hay partida activa, no haces nada.
+
+Física por jugador
+room.players.forEach((player) => {
+
+Recorres todos los jugadores para actualizar su estado.
+
+Gravedad
+player.vy += GRAVITY;
+
+Cada frame, la velocidad vertical aumenta.
+
+Eso simula la gravedad tirando del jugador hacia abajo.
+
+Movimiento
+player.x += player.vx;
+player.y += player.vy;
+
+Ahora sí conviertes velocidad en posición.
+
+Esto significa:
+
+si vx es 5, avanza 5 en X por frame
+si vy es negativa, sube
+si vy es positiva, cae
+Colisión con el suelo
+if (player.y > GROUND_Y) {
+  player.y = GROUND_Y;
+  player.vy = 0;
+}
+
+Si el jugador cae por debajo del suelo:
+
+lo corriges y lo colocas exactamente en GROUND_Y
+pones vy = 0 para que deje de caer
+Broadcast del estado
+broadcast({
+  type: "STATE",
+  players: room.getPlayers(),
+});
+
+Después de actualizar a todos, mandas el estado entero a los clientes.
+
+Así el cliente puede dibujar:
+
+dónde está cada jugador
+quién está conectado
+cómo se mueve todo
+5. src/logger.js
+
+Tu logger usa winston.
+
+La idea es registrar eventos importantes:
+
+arranque del servidor
+conexiones
+desconexiones
+errores
+cambios de estado
+
+Seguramente lo tienes parecido a esto:
+
+const winston = require("winston");
+const path = require("path");
+const fs = require("fs");
+
+const logDir = path.join(process.cwd(), "logs");
+
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
+const logger = winston.createLogger({
+  level: "debug",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    })
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.printf(({ level, message }) => `${level}: ${message}`)
+      ),
+    }),
+    new winston.transports.File({
+      filename: path.join(logDir, "server.log"),
+    }),
+  ],
+});
+
+module.exports = logger;
+Qué hace
+Crear carpeta logs
+
+Si no existe, la crea.
+
+createLogger
+
+Construye un logger con nivel debug.
+
+timestamp
+
+Añade fecha y hora a cada log.
+
+Console transport
+
+Muestra logs en consola.
+
+File transport
+
+Guarda logs en logs/server.log.
+
+Por qué está bien
+
+Así puedes:
+
+ver cosas en directo en terminal
+revisar luego errores en archivo
+6. package.json
+
+Tu package.json describe el proyecto y sus dependencias.
+
+Puntos importantes:
+
+main
+"main": "src/server.js"
+
+Le dice a Node cuál es el archivo principal.
+
+scripts
+
+Si ya lo dejaste como te propuse:
+
+"scripts": {
+  "start": "node src/server.js",
+  "dev": "node src/server.js"
+}
+
+Entonces puedes arrancar con:
+
+npm start
+dependencies
+dotenv: variables de entorno
+winston: logger
+ws: servidor WebSocket
+mongodb, keypress: están instaladas, aunque ahora mismo no las usas de verdad en este flujo principal
+7. .env
+
+Tu .env seguramente tiene algo así:
+
+SERVER_PORT=3000
+
+Sirve para configurar el puerto sin tocar código.
+
+8. Flujo completo de ejecución
+
+Te lo resumo como historia real:
+
+Paso 1: arrancas el servidor
+npm start
+
+Node ejecuta src/server.js.
+
+carga módulos
+crea Room
+abre WebSocket en el puerto configurado
+arranca gameLoop
+Paso 2: se conecta un cliente
+
+Salta:
+
+wss.on("connection", ...)
+se genera un playerId
+todavía no hay jugador en la sala
+solo existe una conexión abierta
+Paso 3: el cliente manda JOIN
+
+Ejemplo:
+
+{
+  "type": "JOIN",
+  "name": "Ana"
+}
+
+El servidor:
+
+valida el mensaje
+crea new Player(id, name, ws)
+lo mete en room.players
+responde con JOINED
+Paso 4: cuando hay suficientes jugadores
+
+room.isReady() devuelve true.
+
+Entonces:
+
+cambias state a "playing"
+
+Y desde ese momento el gameLoop ya empieza a actualizar el juego.
+
+Paso 5: el cliente manda MOVE
+
+Ejemplo:
+
+{
+  "type": "MOVE",
+  "left": true,
+  "jump": false
+}
+
+El servidor no mueve directamente al jugador.
+Hace esto:
+
+cambia vx
+si toca, cambia vy para saltar
+Paso 6: el gameLoop actualiza física
+
+Cada 50 ms:
+
+aplica gravedad
+actualiza posiciones
+corrige el suelo
+envía el estado a todos
+Paso 7: el cliente recibe STATE
+
+Ejemplo de salida:
+
+{
+  "type": "STATE",
+  "players": [
+    {
+      "id": "123",
+      "name": "Ana",
+      "x": 110,
+      "y": 95,
+      "vx": 5,
+      "vy": -3
+    }
+  ]
+}
+
+Con eso el cliente puede pintar el juego.
+
+9. Qué tienes bien planteado
+
+Tu proyecto tiene varias cosas buenas:
+
+separación por módulos
+modelo Player
+modelo Room
+game loop real
+físicas básicas
+logs
+uso de entorno
+base para multijugador real
+10. Cosas mejorables en tu código actual
+
+Aunque está bien encaminado, hay detalles a vigilar.
+
+A. Estás enviando ws dentro de players
+
+Como Player contiene ws, y luego haces:
+
+players: room.getPlayers()
+
+eso puede dar problemas porque ws no es un objeto pensado para serializar a JSON.
+
+Lo correcto más adelante sería mandar una versión limpia, por ejemplo:
+
+getSerializablePlayers() {
+  return Array.from(this.players.values()).map(player => ({
+    id: player.id,
+    name: player.name,
+    x: player.x,
+    y: player.y,
+    vx: player.vx,
+    vy: player.vy
+  }));
+}
+
+y luego usar eso en broadcast.
+
+Este es probablemente el punto técnico más importante a revisar en tu versión actual.
+
+B. La reconexión todavía no existe
+
+Guardas ws, pero aún no reasignas socket si un cliente vuelve.
+
+Eso sería la siguiente mejora.
+
+C. Movimiento horizontal simple
+
+Ahora mismo el jugador mantiene velocidad según el último MOVE.
+Eso puede estar bien, pero muchos juegos usan keydown / keyup o flags de input más finos.
+
+D. No hay límites laterales
+
+No impides que un jugador se vaya demasiado a la izquierda o derecha.
+
+E. No hay plataformas ni colisiones complejas
+
+Solo existe el suelo global GROUND_Y.
+
+11. La idea más importante del diseño
+
+Tu código ya usa una arquitectura bastante correcta:
+
+El cliente
+
+manda intención:
+
+unirse
+moverse
+saltar
+El servidor
+
+decide el estado real:
+
+quién existe
+dónde está
+si puede saltar
+cuándo empieza la partida
+El game loop
+
+mantiene el mundo actualizado
+
+Eso está muy bien, porque en multijugador el servidor debe ser la autoridad.
+
+12. Resumen final de cada archivo
+server.js
+
+Coordina todo:
+
+crea servidor
+recibe mensajes
+crea jugadores
+procesa inputs
+lanza broadcast
+player.js
+
+Define la estructura de cada jugador:
+
+identidad
+conexión
+posición
+velocidad
+room.js
+
+Gestiona la partida:
+
+lista de jugadores
+estado de la sala
+máximo y mínimo
+gameLoop.js
+
+Actualiza el juego en tiempo real:
+
+gravedad
+movimiento
+suelo
+envío del estado
+logger.js
+
+Guarda logs en consola y archivo.
+
+package.json
+
+Configura el proyecto y dependencias.
+
+.env
+
+Permite configurar el puerto.
+
+Si quieres, en el siguiente mensaje te hago una versión todavía más útil: te explico tu código línea por línea con comentarios insertados dentro de cada archivo.

@@ -1,0 +1,348 @@
+{
+  "animationGroups": [
+    {
+      "id": "__main__",
+      "name": "Main",
+      "collapsed": false
+    },
+    {
+      "id": "__group_1776701157759060_0",
+      "name": "Mew",
+      "collapsed": true
+    }
+  ],
+  "animations": [
+    {
+      "id": "anim_1776701801173583",
+      "name": "caminar",
+      "mediaFile": "media/pritesheet.png",
+      "startFrame": 0,
+      "endFrame": 3,
+      "fps": 4.0,
+      "loop": true,
+      "groupId": "__group_1776701157759060_0",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "anchorColor": "red",
+      "hitBoxes": [],
+      "frameRigs": [
+        {
+          "frame": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 1,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 2,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 3,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        }
+      ]
+    },
+    {
+      "id": "anim_1776703048207105",
+      "name": "mew final caminando",
+      "mediaFile": "media/Captura de pantalla de 2026-04-20 18-34-45.png",
+      "startFrame": 0,
+      "endFrame": 0,
+      "fps": 9.0,
+      "loop": true,
+      "groupId": "__main__",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "anchorColor": "red",
+      "hitBoxes": [],
+      "frameRigs": [
+        {
+          "frame": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        }
+      ]
+    },
+    {
+      "id": "anim_1776703423592595",
+      "name": "proando mew",
+      "mediaFile": "media/Captura de pantalla de 2026-04-20 18-42-23.png",
+      "startFrame": 0,
+      "endFrame": 5,
+      "fps": 9.0,
+      "loop": true,
+      "groupId": "__main__",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "anchorColor": "red",
+      "hitBoxes": [
+        {
+          "id": "__hb_1776703552861227_1",
+          "name": "Hit Box 1",
+          "color": "green",
+          "x": 0.11705444865029685,
+          "y": 0.16782871598691929,
+          "width": 0.639678417717161,
+          "height": 0.788147096933424
+        }
+      ],
+      "frameRigs": [
+        {
+          "frame": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        },
+        {
+          "frame": 1,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        },
+        {
+          "frame": 2,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        },
+        {
+          "frame": 3,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        },
+        {
+          "frame": 4,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        },
+        {
+          "frame": 5,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": [
+            {
+              "id": "__hb_1776703552861227_1",
+              "name": "Hit Box 1",
+              "color": "green",
+              "x": 0.11705444865029685,
+              "y": 0.16782871598691929,
+              "width": 0.639678417717161,
+              "height": 0.788147096933424
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "anim_1776703983453414",
+      "name": "mew sprite",
+      "mediaFile": "media/mew_sprite.png",
+      "startFrame": 22,
+      "endFrame": 30,
+      "fps": 12.0,
+      "loop": true,
+      "groupId": "__main__",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "anchorColor": "red",
+      "hitBoxes": [],
+      "frameRigs": [
+        {
+          "frame": 22,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 23,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 24,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 25,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 26,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 27,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 28,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 29,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 30,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        }
+      ]
+    },
+    {
+      "id": "anim_1776790735595199",
+      "name": "Mew Sin Fondo",
+      "mediaFile": "media/mew_sinfondo.png",
+      "startFrame": 0,
+      "endFrame": 5,
+      "fps": 10.0,
+      "loop": true,
+      "groupId": "__main__",
+      "anchorX": 0.5,
+      "anchorY": 0.5,
+      "anchorColor": "red",
+      "hitBoxes": [],
+      "frameRigs": [
+        {
+          "frame": 0,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 1,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 2,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 3,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 4,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        },
+        {
+          "frame": 5,
+          "anchorX": 0.5,
+          "anchorY": 0.5,
+          "anchorColor": "red",
+          "hitBoxes": []
+        }
+      ]
+    }
+  ]
+}

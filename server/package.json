@@ -1,0 +1,16 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Servidor WebSocket para Ocean Park",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "NODE_ENV=dev node app.js",
+    "production": "NODE_ENV=production node app.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "ws": "^8.20.0"
+  },
+  "type": "commonjs"
+}
