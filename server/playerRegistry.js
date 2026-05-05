@@ -21,7 +21,7 @@ class PlayerRegistry {
         const p = this.getPlayer(ws);
         if (p && p.playerGameState.canJump) {
             // Fuerza de salto hacia arriba (en Y-down, hacia arriba es negativo)
-            p.playerGameState.verticalSpeed = -12; 
+            p.playerGameState.verticalSpeed = -9; 
             p.playerGameState.canJump = false;
         }
     }
