@@ -18,6 +18,8 @@ const wss = new WebSocket.Server({ server });
 const playerRegistry = new PlayerRegistry();
 const game = new Game(playerRegistry);
 
+let emptyGameResetTimeout = null;
+
 // Web con QR
 app.get("/web", (req, res) => {
     const apkUrl = `https://${SERVER_HOST}/apk`;
@@ -89,6 +91,10 @@ wss.on("connection", (ws) => {
 
             playerRegistry.removePlayer(ws);
             console.log(`Jugador desconectado: ${player.name}`);
+
+            if (playerRegistry.getPlayersSnapshot().length === 0) {
+                scheduleEmptyGameReset();
+            }
         }
     });
 });
@@ -120,6 +126,7 @@ function handleJoin(ws, data) {
     const newPlayer = new Player(newId, name, spawn.x, spawn.y);
 
     playerRegistry.addPlayer(ws, newPlayer);
+    cancelEmptyGameReset();
 
     ws.send(JSON.stringify({
         type: "JOINED",
@@ -178,7 +185,8 @@ function broadcastState() {
         leafKey: game.gameEngine.getKeyState(),
         door: game.gameEngine.getDoorState(),
         exitZone: game.gameEngine.getExitZoneState(),
-        button: game.gameEngine.getButtonState()
+        button: game.gameEngine.getButtonState(),
+        movingPlatforms: game.gameEngine.getMovingPlatformsState()
     });
 
     wss.clients.forEach(client => {
@@ -186,6 +194,28 @@ function broadcastState() {
             client.send(stateMsg);
         }
     });
+}
+
+function scheduleEmptyGameReset() {
+    if (emptyGameResetTimeout) return;
+
+    emptyGameResetTimeout = setTimeout(() => {
+        const players = playerRegistry.getPlayersSnapshot();
+
+        if (players.length === 0) {
+            console.log("No hay jugadores desde hace 5 segundos. Reiniciando partida al nivel 1...");
+            game.gameEngine.resetToLevel1();
+        }
+
+        emptyGameResetTimeout = null;
+    }, 5000);
+}
+
+function cancelEmptyGameReset() {
+    if (!emptyGameResetTimeout) return;
+
+    clearTimeout(emptyGameResetTimeout);
+    emptyGameResetTimeout = null;
 }
 
 server.listen(PORT, "0.0.0.0", () => {
