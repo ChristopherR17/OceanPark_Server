@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean Park</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap" rel="stylesheet">
+
+    <script src="qrcode.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: 'Pixelify Sans', monospace;
+            background: #080914;
+            color: #e8edf7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            image-rendering: pixelated;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background-image: url("oceanpark-bg.png"), url("media/bg/oceanpark-bg.png");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: cover;
+            filter: brightness(0.45) saturate(0.85);
+        }
+
+        .bg::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(8, 9, 20, 0.35);
+        }
+
+        .content {
+            position: relative;
+            z-index: 2;
+            width: min(90%, 420px);
+            padding: 28px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            background: rgba(10, 12, 26, 0.58);
+            border: 2px solid rgba(232, 237, 247, 0.22);
+            border-radius: 18px;
+            backdrop-filter: blur(2px);
+        }
+
+        h1 {
+            font-size: clamp(2rem, 8vw, 3.5rem);
+            font-weight: 600;
+            letter-spacing: 3px;
+            text-align: center;
+            color: #edf3ff;
+            text-shadow: 2px 2px 0 #11182e;
+        }
+
+        .subtitle {
+            margin-top: 8px;
+            font-size: clamp(0.9rem, 3vw, 1.1rem);
+            text-align: center;
+            color: #aebbd6;
+            letter-spacing: 1px;
+        }
+
+        .qr-panel {
+            padding: 16px;
+            background: #edf3ff;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .qr-label {
+            font-size: 0.9rem;
+            color: #25304b;
+            letter-spacing: 1px;
+        }
+
+        #qrcode canvas,
+        #qrcode img,
+        #qrcode svg {
+            display: block;
+            width: min(210px, 58vw) !important;
+            height: min(210px, 58vw) !important;
+            image-rendering: pixelated;
+        }
+
+        .qr-url {
+            font-size: 0.9rem;
+            color: #4b5670;
+            text-align: center;
+        }
+
+        @media (max-width: 520px) {
+            body {
+                padding: 24px 0;
+                overflow-y: auto;
+            }
+
+            .content {
+                padding: 24px 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg"></div>
+
+    <main class="content">
+        <section>
+            <h1>Ocean Park</h1>
+            <p class="subtitle">Escanea para entrar</p>
+        </section>
+
+        <section class="qr-panel" aria-label="Código QR">
+            <div id="qrcode"></div>
+        </section>
+    </main>
+
+    <script>
+        new QRCode(document.getElementById("qrcode"), {
+            text: "https://agora.xtec.cat/iesesteveterradas/",
+            width: 210,
+            height: 210,
+            colorDark: "#25304b",
+            colorLight: "#edf3ff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    </script>
+</body>
+</html>
