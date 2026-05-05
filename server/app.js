@@ -20,11 +20,7 @@ const game = new Game(playerRegistry);
 
 let emptyGameResetTimeout = null;
 
-/**
- * Página antigua con QR para descargar la APK.
- * Se mantiene en:
- * https://pico3.ieti.site/web
- */
+// Web con QR
 app.get("/web", (req, res) => {
     const apkUrl = `https://${SERVER_HOST}/apk`;
     const indexPath = path.join(__dirname, "..", "web", "index.html");
@@ -32,7 +28,7 @@ app.get("/web", (req, res) => {
     fs.readFile(indexPath, "utf8", (err, data) => {
         if (err) {
             console.error("Error al leer index.html:", err.message);
-            return res.status(500).send("Error al cargar la web del QR");
+            return res.status(500).send("Error al cargar la web");
         }
 
         const html = data.replace(/text:\s*"[^"]*"/, `text: "${apkUrl}"`);
@@ -40,10 +36,12 @@ app.get("/web", (req, res) => {
     });
 });
 
-/**
- * Descargar APK.
- * https://pico3.ieti.site/apk
- */
+// Archivos estáticos de la web QR.
+// Esto permite servir qrcode.min.js, css, imágenes, etc. desde /web/archivo.
+// Ejemplo: /web/qrcode.min.js
+app.use("/web", express.static(path.join(__dirname, "..", "web")));
+
+// Descargar APK
 app.get("/apk", (req, res) => {
     const apkPath = path.join(__dirname, "..", "apk", "android-debug.apk");
 
@@ -55,41 +53,27 @@ app.get("/apk", (req, res) => {
     res.download(apkPath, "oceanpark.apk");
 });
 
-/**
- * Health check.
- * https://pico3.ieti.site/health
- */
+// Comprobación rápida
 app.get("/health", (req, res) => {
     res.json({ ok: true });
 });
 
-/**
- * Flutter Web.
- *
- * El contenido generado con:
- * flutter build web --release --base-href /
- *
- * debe copiarse dentro de:
- * OCEANPARK_SERVER/flutter/
- *
- * Ejemplo:
- * OCEANPARK_SERVER/flutter/index.html
- * OCEANPARK_SERVER/flutter/flutter_bootstrap.js
- * OCEANPARK_SERVER/flutter/main.dart.js
- * OCEANPARK_SERVER/flutter/assets/
- * OCEANPARK_SERVER/flutter/canvaskit/
- */
+// Flutter Web en la raíz /
+//
+// Copia aquí el CONTENIDO de build/web:
+// OCEANPARK_SERVER/flutter/index.html
+// OCEANPARK_SERVER/flutter/flutter_bootstrap.js
+// OCEANPARK_SERVER/flutter/main.dart.js
+// OCEANPARK_SERVER/flutter/assets/
+// OCEANPARK_SERVER/flutter/canvaskit/
+// OCEANPARK_SERVER/flutter/manifest.json
 const flutterWebPath = path.join(__dirname, "..", "flutter");
 
 app.use(express.static(flutterWebPath));
 
-/**
- * Fallback para Flutter Web.
- *
- * Esto permite que Flutter maneje rutas internas si algún día usas navegación.
- * Importante: debe ir después de /web, /apk y /health.
- */
-app.get("*", (req, res) => {
+// Fallback para Flutter Web.
+// Debe ir al final de todas las rutas HTTP.
+app.use((req, res) => {
     res.sendFile(path.join(flutterWebPath, "index.html"));
 });
 
@@ -257,4 +241,5 @@ server.listen(PORT, "0.0.0.0", () => {
     console.log(`Flutter Web: https://${SERVER_HOST}/`);
     console.log(`Web QR: https://${SERVER_HOST}/web`);
     console.log(`APK: https://${SERVER_HOST}/apk`);
+    console.log(`Health: https://${SERVER_HOST}/health`);
 });
