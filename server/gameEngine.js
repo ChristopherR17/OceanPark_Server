@@ -165,6 +165,25 @@ class GameEngine {
         };
     }
 
+    getRespawnPosition(index = 0) {
+        const base = this.currentConfig.spawn;
+
+        if (this.level !== 2) {
+            return {
+                x: base.x + index * 40,
+                y: base.y
+            };
+        }
+
+        const col = index % 2;
+        const row = Math.floor(index / 2);
+
+        return {
+            x: base.x + col * 40,
+            y: base.y - row * 36
+        };
+    }
+
     loadPlatformsFromTileMap(levelNumber = this.level) {
         const layer = this.loadLevelLayer(levelNumber);
 
@@ -678,7 +697,11 @@ class GameEngine {
                 this.resetKey();
             }
 
-            player.resetPosition();
+            const players = this.playerRegistry.getPlayersSnapshot();
+            const index = players.findIndex(p => p.id === player.id);
+            const respawn = this.getRespawnPosition(index);
+
+            player.resetForNextLevel(respawn.x, respawn.y);
         }
     }
 
