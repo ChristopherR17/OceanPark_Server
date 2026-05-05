@@ -61,7 +61,7 @@ class GameEngine {
                 layerX: CLIENT_LAYER_X,
                 layerY: CLIENT_LAYER_Y,
                 spawn: { x: 107, y: 414 + CLIENT_LAYER_Y - 32 },
-                key: { x: 45, y: 300 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                key: { x: 45, y: 310 + CLIENT_LAYER_Y, width: 32, height: 32 },
                 door: { x: 260, y: 379 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
@@ -76,7 +76,7 @@ class GameEngine {
                 spawn: { x: 107, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 32 },
 
                 // Bajada visual respecto al JSON original para que quede más alcanzable.
-                key: { x: 480, y: 145 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                key: { x: 480, y: 152 + CLIENT_LAYER_Y, width: 32, height: 32 },
 
                 door: { x: 550, y: 185 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 button: { x: 445, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 22, width: 20, height: 22, pressed: false },
@@ -159,9 +159,39 @@ class GameEngine {
 
     getSpawnPosition(index = 0) {
         const spawn = this.currentConfig.spawn;
+
+        if (this.level !== 2) {
+            return {
+                x: spawn.x + index * 40,
+                y: spawn.y
+            };
+        }
+
+        const col = index % 2;
+        const row = Math.floor(index / 2);
+
         return {
-            x: spawn.x + index * 40,
-            y: spawn.y
+            x: spawn.x + col * 40,
+            y: spawn.y - row * 32
+        };
+    }
+
+    getRespawnPosition(index = 0) {
+        const base = this.currentConfig.spawn;
+
+        if (this.level !== 2) {
+            return {
+                x: base.x + index * 40,
+                y: base.y
+            };
+        }
+
+        const col = index % 2;
+        const row = Math.floor(index / 2);
+
+        return {
+            x: base.x + col * 40,
+            y: base.y - row * 32
         };
     }
 
@@ -678,7 +708,11 @@ class GameEngine {
                 this.resetKey();
             }
 
-            player.resetPosition();
+            const players = this.playerRegistry.getPlayersSnapshot();
+            const index = players.findIndex(p => p.id === player.id);
+            const respawn = this.getRespawnPosition(index);
+
+            player.resetForNextLevel(respawn.x, respawn.y);
         }
     }
 
