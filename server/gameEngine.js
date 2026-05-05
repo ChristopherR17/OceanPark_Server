@@ -76,9 +76,9 @@ class GameEngine {
                 spawn: { x: 107, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 32 },
 
                 // Bajada visual respecto al JSON original para que quede más alcanzable.
-                key: { x: 414, y: 115 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                key: { x: 480, y: 145 + CLIENT_LAYER_Y, width: 32, height: 32 },
 
-                door: { x: 475, y: 181 + CLIENT_LAYER_Y, width: 54, height: 38 },
+                door: { x: 550, y: 185 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 button: { x: 445, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 22, width: 20, height: 22, pressed: false },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
