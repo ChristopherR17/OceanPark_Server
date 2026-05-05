@@ -20,7 +20,11 @@ const game = new Game(playerRegistry);
 
 let emptyGameResetTimeout = null;
 
-// Web con QR
+/**
+ * Página antigua con QR para descargar la APK.
+ * Se mantiene en:
+ * https://pico3.ieti.site/web
+ */
 app.get("/web", (req, res) => {
     const apkUrl = `https://${SERVER_HOST}/apk`;
     const indexPath = path.join(__dirname, "..", "web", "index.html");
@@ -28,7 +32,7 @@ app.get("/web", (req, res) => {
     fs.readFile(indexPath, "utf8", (err, data) => {
         if (err) {
             console.error("Error al leer index.html:", err.message);
-            return res.status(500).send("Error al cargar la web");
+            return res.status(500).send("Error al cargar la web del QR");
         }
 
         const html = data.replace(/text:\s*"[^"]*"/, `text: "${apkUrl}"`);
@@ -36,7 +40,10 @@ app.get("/web", (req, res) => {
     });
 });
 
-// Descargar APK
+/**
+ * Descargar APK.
+ * https://pico3.ieti.site/apk
+ */
 app.get("/apk", (req, res) => {
     const apkPath = path.join(__dirname, "..", "apk", "android-debug.apk");
 
@@ -48,16 +55,43 @@ app.get("/apk", (req, res) => {
     res.download(apkPath, "oceanpark.apk");
 });
 
-// Comprobación rápida
+/**
+ * Health check.
+ * https://pico3.ieti.site/health
+ */
 app.get("/health", (req, res) => {
     res.json({ ok: true });
 });
 
-// Archivos estáticos: index.html, qrcode.min.js, imágenes, css, etc.
-app.use(express.static(path.join(__dirname, "..", "web")));
+/**
+ * Flutter Web.
+ *
+ * El contenido generado con:
+ * flutter build web --release --base-href /
+ *
+ * debe copiarse dentro de:
+ * OCEANPARK_SERVER/flutter/
+ *
+ * Ejemplo:
+ * OCEANPARK_SERVER/flutter/index.html
+ * OCEANPARK_SERVER/flutter/flutter_bootstrap.js
+ * OCEANPARK_SERVER/flutter/main.dart.js
+ * OCEANPARK_SERVER/flutter/assets/
+ * OCEANPARK_SERVER/flutter/canvaskit/
+ */
+const flutterWebPath = path.join(__dirname, "..", "flutter");
 
-let SPAWN_X = 107;
-let SPAWN_Y = 385 + 673;
+app.use(express.static(flutterWebPath));
+
+/**
+ * Fallback para Flutter Web.
+ *
+ * Esto permite que Flutter maneje rutas internas si algún día usas navegación.
+ * Importante: debe ir después de /web, /apk y /health.
+ */
+app.get("*", (req, res) => {
+    res.sendFile(path.join(flutterWebPath, "index.html"));
+});
 
 wss.on("connection", (ws) => {
     console.log("Cliente conectado");
@@ -68,7 +102,7 @@ wss.on("connection", (ws) => {
 
             if (data.type === "JOIN") {
                 handleJoin(ws, data);
-            }else if (data.type === "SPECTATE") {
+            } else if (data.type === "SPECTATE") {
                 ws.isSpectator = true;
             } else if (data.type === "MOVE") {
                 handleMove(ws, data);
@@ -105,7 +139,7 @@ function handleJoin(ws, data) {
     if (!name) {
         ws.send(JSON.stringify({
             type: "ERROR",
-            message: "Nombre vacÃ­o"
+            message: "Nombre vacío"
         }));
         return;
     }
@@ -220,6 +254,7 @@ function cancelEmptyGameReset() {
 
 server.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor Ocean Park en puerto ${PORT}`);
-    console.log(`Web: https://${SERVER_HOST}/web`);
+    console.log(`Flutter Web: https://${SERVER_HOST}/`);
+    console.log(`Web QR: https://${SERVER_HOST}/web`);
     console.log(`APK: https://${SERVER_HOST}/apk`);
 });
