@@ -9,6 +9,8 @@ class PlayerGameState {
 
         this.isMovingLeft = false;
         this.isMovingRight = false;
+        this.facingRight = true;
+
         this.canJump = false;
 
         this.width = 32;
@@ -16,7 +18,6 @@ class PlayerGameState {
 
         this.hitbox = new Hitbox(this.x, this.y, this.width, this.height);
 
-        // Sprint 2: saber si este jugador ya ha cruzado la puerta
         this.hasFinishedLevel = false;
     }
 }

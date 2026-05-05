@@ -19,9 +19,13 @@ class Player {
         if (direction === "LEFT") {
             this.playerGameState.isMovingLeft = true;
             this.playerGameState.isMovingRight = false;
+            this.playerGameState.facingRight = false;
+
         } else if (direction === "RIGHT") {
             this.playerGameState.isMovingLeft = false;
             this.playerGameState.isMovingRight = true;
+            this.playerGameState.facingRight = true;
+
         } else if (direction === "NONE") {
             this.playerGameState.isMovingLeft = false;
             this.playerGameState.isMovingRight = false;

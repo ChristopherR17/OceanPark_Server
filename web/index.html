@@ -6,7 +6,8 @@
     <title>Ocean Park</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap" rel="stylesheet">
 
     <script src="qrcode.min.js"></script>
 
@@ -19,8 +20,9 @@
 
         body {
             min-height: 100vh;
-            font-family: 'Press Start 2P', monospace;
-            background-color: #101020;
+            font-family: 'Pixelify Sans', monospace;
+            background: #080914;
+            color: #e8edf7;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -32,139 +34,119 @@
             position: fixed;
             inset: 0;
             z-index: 0;
-            background-image: url("media/bg/oceanpark-bg.png");
+            background-image: url("oceanpark-bg.png"), url("media/bg/oceanpark-bg.png");
             background-repeat: no-repeat;
-            background-position: center center;
+            background-position: center;
             background-size: cover;
-            image-rendering: pixelated;
+            filter: brightness(0.45) saturate(0.85);
         }
 
         .bg::after {
             content: "";
             position: absolute;
             inset: 0;
-            background:
-                linear-gradient(
-                    to bottom,
-                    rgba(10, 10, 25, 0.35),
-                    rgba(10, 10, 25, 0.75)
-                );
+            background: rgba(8, 9, 20, 0.35);
         }
 
         .content {
             position: relative;
-            z-index: 10;
+            z-index: 2;
+            width: min(90%, 420px);
+            padding: 28px 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 32px;
-            padding: 24px;
+            gap: 24px;
+            background: rgba(10, 12, 26, 0.58);
+            border: 2px solid rgba(232, 237, 247, 0.22);
+            border-radius: 18px;
+            backdrop-filter: blur(2px);
         }
 
-        .title-box {
-            text-align: center;
-        }
-
-        .title-box h1 {
-            font-size: clamp(1.2rem, 4vw, 2.4rem);
-            color: #f2f2ff;
-            text-shadow:
-                3px 3px 0 #1d2747,
-                6px 6px 0 #050510;
+        h1 {
+            font-size: clamp(2rem, 8vw, 3.5rem);
+            font-weight: 600;
             letter-spacing: 3px;
-            line-height: 1.6;
+            text-align: center;
+            color: #edf3ff;
+            text-shadow: 2px 2px 0 #11182e;
         }
 
-        .title-box .subtitle {
-            font-size: clamp(0.55rem, 1.5vw, 0.85rem);
-            color: #9fb6e8;
-            margin-top: 12px;
-            letter-spacing: 4px;
+        .subtitle {
+            margin-top: 8px;
+            font-size: clamp(0.9rem, 3vw, 1.1rem);
+            text-align: center;
+            color: #aebbd6;
+            letter-spacing: 1px;
         }
 
         .qr-panel {
-            background: #e8edf7;
-            border: 4px solid #26324f;
-            box-shadow:
-                0 0 0 4px #e8edf7,
-                0 0 0 8px #26324f,
-                8px 8px 0 8px #080812;
-            padding: 20px;
+            padding: 16px;
+            background: #edf3ff;
+            border-radius: 14px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
         }
 
         .qr-label {
-            font-size: 0.5rem;
-            color: #26324f;
-            letter-spacing: 2px;
+            font-size: 0.9rem;
+            color: #25304b;
+            letter-spacing: 1px;
         }
 
         #qrcode canvas,
-        #qrcode img {
+        #qrcode img,
+        #qrcode svg {
             display: block;
+            width: min(210px, 58vw) !important;
+            height: min(210px, 58vw) !important;
             image-rendering: pixelated;
         }
 
         .qr-url {
-            font-size: 0.35rem;
-            color: #3b486d;
+            font-size: 0.9rem;
+            color: #4b5670;
             text-align: center;
-            max-width: 260px;
-            word-break: break-all;
-            line-height: 1.8;
         }
 
-        .ground {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 32px;
-            background: repeating-linear-gradient(
-                90deg,
-                #1d2747 0px,
-                #1d2747 16px,
-                #2f3f68 16px,
-                #2f3f68 32px
-            );
-            border-top: 4px solid #e8edf7;
-            z-index: 5;
+        @media (max-width: 520px) {
+            body {
+                padding: 24px 0;
+                overflow-y: auto;
+            }
+
+            .content {
+                padding: 24px 18px;
+            }
         }
     </style>
 </head>
 
 <body>
-
     <div class="bg"></div>
 
-    <div class="content">
-        <div class="title-box">
-            <h1>OCEAN PARK</h1>
-            <p class="subtitle">ESCANEA Y DESCARGA</p>
-        </div>
+    <main class="content">
+        <section>
+            <h1>Ocean Park</h1>
+            <p class="subtitle">Escanea para entrar</p>
+        </section>
 
-        <div class="qr-panel">
-            <span class="qr-label">[ ESCANEA AQUÍ ]</span>
+        <section class="qr-panel" aria-label="Código QR">
             <div id="qrcode"></div>
-            <p class="qr-url">IETI</p>
-        </div>
-    </div>
-
-    <div class="ground"></div>
+        </section>
+    </main>
 
     <script>
         new QRCode(document.getElementById("qrcode"), {
             text: "https://agora.xtec.cat/iesesteveterradas/",
-            width: 220,
-            height: 220,
-            colorDark: "#26324f",
-            colorLight: "#e8edf7",
+            width: 210,
+            height: 210,
+            colorDark: "#25304b",
+            colorLight: "#edf3ff",
             correctLevel: QRCode.CorrectLevel.H
         });
     </script>
-
 </body>
 </html>

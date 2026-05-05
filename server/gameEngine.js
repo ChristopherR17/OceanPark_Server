@@ -61,7 +61,7 @@ class GameEngine {
                 layerX: CLIENT_LAYER_X,
                 layerY: CLIENT_LAYER_Y,
                 spawn: { x: 107, y: 414 + CLIENT_LAYER_Y - 32 },
-                key: { x: 45, y: 300 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                key: { x: 45, y: 310 + CLIENT_LAYER_Y, width: 32, height: 32 },
                 door: { x: 260, y: 379 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
@@ -76,9 +76,9 @@ class GameEngine {
                 spawn: { x: 107, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 32 },
 
                 // Bajada visual respecto al JSON original para que quede más alcanzable.
-                key: { x: 414, y: 115 + CLIENT_LAYER_Y, width: 32, height: 32 },
+                key: { x: 480, y: 145 + CLIENT_LAYER_Y, width: 32, height: 32 },
 
-                door: { x: 475, y: 181 + CLIENT_LAYER_Y, width: 54, height: 38 },
+                door: { x: 550, y: 185 + CLIENT_LAYER_Y, width: 54, height: 38 },
                 button: { x: 445, y: 13 * TILE_SIZE + CLIENT_LAYER_Y - 22, width: 20, height: 22, pressed: false },
                 exitOffset: { x: 45, y: -40, width: 80, height: 100 },
                 deathY: 900 + CLIENT_LAYER_Y,
@@ -709,6 +709,20 @@ class GameEngine {
             const spawn = this.getSpawnPosition(index);
             player.resetForNextLevel(spawn.x, spawn.y);
         });
+    }
+
+    resetToLevel1() {
+        this.levelChanging = false;
+        this.loadLevel(1);
+
+        const players = this.playerRegistry.getPlayersSnapshot();
+
+        players.forEach((player, index) => {
+            const spawn = this.getSpawnPosition(index);
+            player.resetForNextLevel(spawn.x, spawn.y);
+        });
+
+        console.log("Partida reiniciada al nivel 1.");
     }
 
     goToLevel2(players) {
