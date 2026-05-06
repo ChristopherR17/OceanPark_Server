@@ -89,7 +89,7 @@ app.use(express.static(flutterWebPath));
  * Esto permite que Flutter maneje rutas internas si algún día usas navegación.
  * Importante: debe ir después de /web, /apk y /health.
  */
-app.get("*", (req, res) => {
+app.get((req, res) => {
     res.sendFile(path.join(flutterWebPath, "index.html"));
 });
 
